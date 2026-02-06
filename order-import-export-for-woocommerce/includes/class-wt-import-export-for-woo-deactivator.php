@@ -20,8 +20,8 @@
  * @subpackage Wt_Import_Export_For_Woo/includes
  * @author     Webtoffee <info@webtoffee.com>
  */
-if(!class_exists('Wt_Import_Export_For_Woo_Basic_Deactivator_Order')){
-class Wt_Import_Export_For_Woo_Basic_Deactivator_Order {
+if(!class_exists('Wt_Import_Export_For_Woo_Order_Basic_Deactivator_Order')){
+class Wt_Import_Export_For_Woo_Order_Basic_Deactivator_Order {
 
 	/**
 	 * Short Description. (use period)

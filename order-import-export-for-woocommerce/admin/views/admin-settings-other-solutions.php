@@ -29,8 +29,8 @@ if ( ! defined( 'WPINC' ) ) {die;
 <div class="wt-iew-tab-content" data-id="<?php echo esc_attr($target_id);?>">
     <div class="wt_row"> 
         <div clas="wt_headings">
-            <h1 class="wt_heading_1"><?php _e('More Plugins To Make Your Store Stand Out', 'order-import-export-for-woocommerce'); ?></h1>
-            <h2 class="wt_heading_2"><?php _e('Check out our other plugins that are perfectly suited for WooCommerce store needs.', 'order-import-export-for-woocommerce'); ?></h2> 
+            <h1 class="wt_heading_1"><?php esc_html_e('More Plugins To Make Your Store Stand Out', 'order-import-export-for-woocommerce'); ?></h1>
+            <h2 class="wt_heading_2"><?php esc_html_e('Check out our other plugins that are perfectly suited for WooCommerce store needs.', 'order-import-export-for-woocommerce'); ?></h2> 
         </div>
     <div class="wt_column">
 <?php 
@@ -40,6 +40,15 @@ $wt_admin_img_path = WT_O_IEW_PLUGIN_URL . 'assets/images/other_solutions';
 
 /* Plugin lists array */
 $plugins=array(
+    'accessibility-checker' => array(
+        'title'         => __('Accessibility Tool Kit: WP Accessibility for WCAG, Section 508, ADA, EAA Compliance', 'order-import-export-for-woocommerce'),
+        'description'   => __('Build an accessible WordPress site that works for everyone. Scan for accessibility issues, get fix recommendations, and ensure WCAG compliance, all without writing code. Inclusive web design made simple.', 'order-import-export-for-woocommerce'),
+        'image_url'     => 'accessibility-checker.png',
+        'premium_url'   => '',
+        'basic_url'     => 'https://wordpress.org/plugins/accessibility-plus/',
+        'pro_plugin'    => '', // No pro plugin available
+        'basic_plugin'  => 'accessibility-plus/accessibility.php',
+    ),
     'product_feed_sync' => array(
         'title'         => __('WebToffee WooCommerce Product Feed & Sync Manager', 'order-import-export-for-woocommerce'),
         'description'   => __('Generate WooCommerce product feeds for Google Merchant Center and Facebook Business Manager. Use the Facebook catalog sync manager to sync WooCommerce products with Facebook and Instagram shops.', 'order-import-export-for-woocommerce'),
@@ -132,7 +141,7 @@ $plugins=array(
         'premium_url'   => 'https://www.webtoffee.com/product/smart-coupons-for-woocommerce/?utm_source=other_solution_page&utm_medium=free_plugin&utm_campaign=smart_coupons',
         'basic_url'     => 'https://wordpress.org/plugins/wt-smart-coupons-for-woocommerce/',
         'pro_plugin'    => 'wt-smart-coupon-pro/wt-smart-coupon-pro.php',
-        'basic_plugin'  => 'wt-smart-coupon/wt-smart-coupon.php',
+        'basic_plugin'  => 'wt-smart-coupons-for-woocommerce/wt-smart-coupon.php',
     ),
     'url_coupons_plugin' => array(
         'title'         => __('URL Coupons for WooCommerce', 'order-import-export-for-woocommerce'),
@@ -257,7 +266,7 @@ $plugins=array(
                 if ( isset( $value['premium_url'] ) && ! empty( $value['premium_url'] ) ) {
                 ?>
                     <div class="wt_premium_button" style="width: 100%;">
-                        <a href="<?php echo esc_url($value['premium_url']); ?>" class="wt_get_premium_btn" target="_blank"><img src="<?php echo esc_url($wt_admin_img_path . '/promote_crown.png');?>" style="width: 10px;height: 10px;"><?php  _e(' Get Premium','order-import-export-for-woocommerce'); ?></a>
+                        <a href="<?php echo esc_url($value['premium_url']); ?>" class="wt_get_premium_btn" target="_blank"><img src="<?php echo esc_url($wt_admin_img_path . '/promote_crown.png');?>" style="width: 10px;height: 10px;"><?php esc_html_e(' Get Premium','order-import-export-for-woocommerce'); ?></a>
                     </div> 
 <?php           }   
                     if(is_plugin_active($value['basic_plugin']))
@@ -265,18 +274,19 @@ $plugins=array(
 ?>
                     <div class="wt_installed_button">
                         <button class="wt_installed_btn">
-                            <?php _e('Installed','order-import-export-for-woocommerce'); ?>
+                            <?php esc_html_e('Installed','order-import-export-for-woocommerce'); ?>
                         </button>
                     </div>
 <?php               
                     }elseif(isset($value['basic_plugin']) && "" !== $value['basic_plugin'] && !is_plugin_active($value['basic_plugin'])
-                    && isset($value['basic_url']) && "" !== $value['basic_url'] && isset($value['pro_plugin']) && is_string($value['pro_plugin']) && "" !== $value['pro_plugin'] && !is_plugin_active($value['pro_plugin']))
+                    && isset($value['basic_url']) && "" !== $value['basic_url'] 
+                    && ( empty($value['pro_plugin'] ) || ! is_plugin_active( $value['pro_plugin'] ) ) )
 		            { 
 ?>
-                    <div class="wt_free_button<?php echo (empty($value['premium_url'])) ? ' full_width' : ''; ?>">
+                    <div class="wt_free_button<?php echo esc_attr(empty($value['premium_url'])) ? ' full_width' : ''; ?>">
                              <a class="wt_free_btn_a" href="<?php echo esc_url($value['basic_url']); ?>" target="_blank">
-                                <button class="wt_free_btn<?php echo (empty($value['premium_url'])) ? ' full_width' : ''; ?>">
-                                    <?php _e('Get Free Plugin', 'product-import-export-for-woo'); ?>
+                                <button class="wt_free_btn<?php echo esc_attr(empty($value['premium_url'])) ? ' full_width' : ''; ?>">
+                                    <?php esc_html_e('Get Free Plugin', 'order-import-export-for-woocommerce'); ?>
                                 </button>
                             </a>
                     </div>

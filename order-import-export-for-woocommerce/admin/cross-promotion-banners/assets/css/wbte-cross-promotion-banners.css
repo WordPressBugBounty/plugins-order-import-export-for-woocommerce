@@ -1,8 +1,8 @@
-.wt-cta-banner { background: #fff; }
+.wbte-cta-banner { background: #fff; }
 
-.wt-cta-content { margin: -6px -12px -12px -12px; }
+.wbte-cta-content { margin: -6px -12px -12px -12px; }
 
-.wt-cta-header {
+.wbte-cta-header {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -12,19 +12,19 @@
     background: #F9FCFF;
 }
 
-.wt-cta-icon {
+.wbte-cta-icon {
     width: 47px;
     height: 47px;
     border-radius: 4px;
 }
 
-.wt-smart-coupon-cta-icon {
+.wbte-smart-coupon-cta-icon {
     width: 62px;
     height: 61px;
     border-radius: 4px;
 }
 
-.wt-cta-header h3 {
+.wbte-cta-header h3 {
     margin: 0;
     font-size: 13px;
     font-weight: 600;
@@ -33,17 +33,17 @@
     padding: 0;
 }
 
-.wt-cta-features {
+.wbte-cta-features {
     margin: 0;
-    padding: 0 12px;
+    padding: 12px 12px 0 12px;
     list-style: none;
 }
 
-.wt-cta-features li {
+.wbte-cta-features li {
     position: relative;
     padding-left: 24px;
     margin-bottom: 12px;
-    font-size: 12px;
+    font-size: 13px;
     color: #212121;
     line-height: 1.4;
     display: flex;
@@ -51,7 +51,7 @@
     font-weight: bold;
 }
 
-.wt-cta-features li::before {
+.wbte-cta-features li::before {
     content: "✓";
     position: absolute;
     left: 0;
@@ -69,13 +69,13 @@
     line-height: 1;
 }
 
-.wt-cta-footer {
+.wbte-cta-footer {
     margin-top: 20px;
     padding: 0 12px 12px;
     text-align: center;
 }
 
-.wt-cta-button {
+.wbte-cta-button {
     display: block;
     background: #2270B1;
     color: #fff ;
@@ -88,24 +88,24 @@
     transition: background-color 0.3s ease;
 }
 
-.wt-cta-button:hover,
-.wt-cta-button:focus,
-.wt-cta-button:active {
+.wbte-cta-button:hover,
+.wbte-cta-button:focus,
+.wbte-cta-button:active {
     background: #135e96;
     color: #fff ;
     outline: none ;
     box-shadow: none ;
 }
 
-.wt-cta-guarantees {
+/* .wt-cta-guarantees {
     margin: 15px 0;
 }
 
 .guarantee-icon {
     font-size: 14px;
-}
+} */
 
-.wt-cta-toggle {
+.wbte-cta-toggle{
     display: inline-block;
     color: #0500FF;
     text-decoration: none;
@@ -114,53 +114,54 @@
     cursor: pointer;
 }
 
-.wt-cta-toggle:hover {
+.wbte-cta-toggle:hover {
     color: #135e96;
     text-decoration: underline;
 }
 
-.wt-cta-features .hidden-feature {
+.wbte-cta-features .hidden-feature {
     display: none;
 }
 
-.wt-cta-features.show-all .hidden-feature {
+.wbte-cta-features.show-all .hidden-feature {
     display: flex;
 }
 
 /* Remove postbox-header arrows since we're using meta box */
-#wt_product_import_export_pro .handle-actions,
-#wt_coupon_import_export_pro .handle-actions,
+#wbte_product_import_export_pro .handle-actions,
+#wbte_coupon_import_export_pro .handle-actions,
 #wt_pklist_cta_banner .handle-actions {
     display: none;
 }
 
-#wt_product_import_export_pro h2.hndle,
-#wt_coupon_import_export_pro h2.hndle,
-#wt_pdf_invoice_pro h2.hndle {
+/* #wbte_product_import_export_pro h2.hndle,
+#wbte_coupon_import_export_pro h2.hndle,
+#wbte_pdf_invoice_pro h2.hndle {
     display: none !important;
-}
+} */
 
-#wt_product_import_export_pro .handlediv,
-#wt_coupon_import_export_pro .handlediv,
-#wt_pdf_invoice_pro .handlediv {
+
+#wbte_product_import_export_pro .handlediv,
+#wbte_coupon_import_export_pro .handlediv,
+#wbte_pdf_invoice_pro .handlediv {
     display: none !important;
 }
 
 /* Only hide postbox header for specific banner meta boxes, not all */
-#wt_product_import_export_pro .postbox-header,
-#wt_coupon_import_export_pro .postbox-header,
-#wt_pdf_invoice_pro .postbox-header {
+/* #wbte_product_import_export_pro .postbox-header,
+#wbte_coupon_import_export_pro .postbox-header,
+#wbte_pdf_invoice_pro .postbox-header {
     display: none !important;
-}
+} */
 
-.wt-cta-footer-links {
+.wbte-cta-footer-links {
     display: flex;
     flex-direction: column;
     gap: 15px;
     margin-bottom: 15px;
 }
 
-.wt-cta-footer-links .wt-cta-toggle {
+.wbte-cta-footer-links .wbte-cta-toggle{
     color: #0500FF;
     text-decoration: none;
     font-size: 13px;
@@ -169,18 +170,18 @@
     background: transparent ;
 }
 
-.wt-cta-footer-links .wt-cta-toggle:focus,
-.wt-cta-footer-links .wt-cta-toggle:active {
+.wbte-cta-footer-links .wbte-cta-toggle:focus,
+.wbte-cta-footer-links .wbte-cta-toggle:active {
     outline: none ;
     box-shadow: none ;
     background: transparent ;
 }
 
-.wt-cta-footer-links .wt-cta-button {
+.wbte-cta-footer-links .wbte-cta-button {
     margin-bottom: 0;
 }
 
-.wt-cta-footer-links a:first-child {
+.wbte-cta-footer-links a:first-child {
     color: #0500FF;
     text-decoration: none;
     font-size: 13px;
@@ -190,9 +191,12 @@
     background: transparent ;
 }
 
-.wt-cta-footer-links a:first-child:focus,
-.wt-cta-footer-links a:first-child:active {
+.wbte-cta-footer-links a:first-child:focus,
+.wbte-cta-footer-links a:first-child:active {
     outline: none ;
     box-shadow: none ;
     background: transparent ;
 } 
+
+#wbte_coupon_import_export_pro .postbox-header h2, #wbte_pdf_invoice_pro .postbox-header h2, #wbte_product_import_export_pro .postbox-header h2{ color: #000; font-size: 13px; font-weight: 600; }
+#wbte_coupon_import_export_pro .postbox-header .handle-actions, #wbte_pdf_invoice_pro .postbox-header .handle-actions, #wbte_product_import_export_pro .postbox-header .handle-actions{ display: none; }

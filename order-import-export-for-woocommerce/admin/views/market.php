@@ -13,19 +13,19 @@ if (!defined('ABSPATH')) {
 				<div class="ier-premium-upgrade wt-ierpro-sidebar">
 					<div class="wt-ierpro-header" style="width:95%">
 						<div class="wt-ierpro-name">
-							<div style="float: left"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/order-ie.svg" alt="featured img" width="36" height="36"></div>
+							<div style="float: left"><img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/gopro/order-ie.svg" alt="featured img" width="36" height="36"></div>
 							<div style="float: right;width: calc(100% - 47px);">
-								<h4 class="wt-ier-product-name"><?php _e('Order, Coupon, Subscription Import Export for WooCommerce'); ?></h4>
+								<h4 class="wt-ier-product-name"><?php esc_html_e('Order, Coupon, Subscription Import Export for WooCommerce', 'order-import-export-for-woocommerce'); ?></h4>
 							</div>
-							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
+							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
 							<?php
 							/**
 							 * @since 2.5.8
 							 * Black Friday Cyber Monday banner offer
 							 */
-							if (true === Wt_Import_Export_For_Woo_Basic::is_bfcm_season()) {
+							if (true === Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season()) {
 
-							?><div class="wtier-bfcm-banner-2024-offer" style="position: absolute; top: 0;right: 0;">
+							?><div class="wtier-bfcm-banner-2025-offer" style="position: absolute; top: 0;right: 0;">
 									<svg width="31" height="40" viewBox="0 0 31 40" fill="none" xmlns="http://www.w3.org/2000/svg">
 										<path d="M0 0H30.6977V40L15.3488 33.5849L0 40V0Z" fill="#FC4762" />
 										<path d="M11.1814 27.8613C10.7556 27.8613 10.363 27.752 10.0037 27.5332C9.64819 27.3145 9.36108 27.0234 9.14233 26.6602C8.92748 26.293 8.82006 25.8906 8.82006 25.4531L8.83178 21.6504C8.83178 21.2051 8.9392 20.8047 9.15405 20.4492C9.36498 20.0898 9.65014 19.8027 10.0095 19.5879C10.3689 19.3691 10.7595 19.2598 11.1814 19.2598C11.6189 19.2598 12.0115 19.3672 12.3591 19.582C12.7107 19.7969 12.9919 20.0859 13.2029 20.4492C13.4177 20.8086 13.5251 21.209 13.5251 21.6504L13.5369 25.4531C13.5369 25.8906 13.4314 26.291 13.2205 26.6543C13.0056 27.0215 12.7205 27.3145 12.365 27.5332C12.0095 27.752 11.615 27.8613 11.1814 27.8613ZM11.1814 26.4141C11.4236 26.4141 11.6345 26.3164 11.8142 26.1211C11.9939 25.9219 12.0837 25.6992 12.0837 25.4531L12.072 21.6504C12.072 21.3848 11.988 21.1602 11.8201 20.9766C11.6521 20.793 11.4392 20.7012 11.1814 20.7012C10.9353 20.7012 10.7244 20.791 10.5486 20.9707C10.3728 21.1504 10.2849 21.377 10.2849 21.6504V25.4531C10.2849 25.7148 10.3728 25.9414 10.5486 26.1328C10.7244 26.3203 10.9353 26.4141 11.1814 26.4141ZM15.8513 27.7441H14.5037C14.4646 27.7441 14.4451 27.7246 14.4451 27.6855L14.4685 19.4414C14.4685 19.4102 14.4841 19.3945 14.5154 19.3945H18.3591C18.3982 19.3945 18.4177 19.4102 18.4177 19.4414V20.7949C18.4177 20.8262 18.4021 20.8418 18.3708 20.8418H15.9099V22.7051H18.3708C18.4021 22.7051 18.4177 22.7246 18.4177 22.7637L18.4294 24.123C18.4294 24.1543 18.4099 24.1699 18.3708 24.1699H15.9099V27.6855C15.9099 27.7246 15.8904 27.7441 15.8513 27.7441ZM20.9021 27.7441H19.5544C19.5154 27.7441 19.4958 27.7246 19.4958 27.6855L19.5193 19.4414C19.5193 19.4102 19.5349 19.3945 19.5662 19.3945H23.4099C23.449 19.3945 23.4685 19.4102 23.4685 19.4414V20.7949C23.4685 20.8262 23.4529 20.8418 23.4216 20.8418H20.9607V22.7051H23.4216C23.4529 22.7051 23.4685 22.7246 23.4685 22.7637L23.4802 24.123C23.4802 24.1543 23.4607 24.1699 23.4216 24.1699H20.9607V27.6855C20.9607 27.7246 20.9412 27.7441 20.9021 27.7441Z" fill="white" />
@@ -40,12 +40,12 @@ if (!defined('ABSPATH')) {
 							<div class="wt-ier-suite-main-points">
 								<div class="wt-ier-suite-sub-points-left" style="float:left;margin-top: 15px;">
 									<ul class="ticked-list wt-ierpro-allfeat">
-										<li><?php _e('Export and import subscriptions'); ?></li>
-										<li><?php _e('Import via FTP/SFTP and URL'); ?></li>
-										<li><?php _e('Import & export in Excel, XML, CSV, and TSV formats'); ?></li>
-										<li><?php _e('Schedule automated import & export'); ?></li>
-										<li><?php _e('Advanced filters and customizations for better control'); ?></li>
-										<li><?php _e('Export and Import custom fields and third - party plugins fields'); ?></li>
+										<li><?php esc_html_e('Export and import subscriptions', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Import via FTP/SFTP and URL', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Import & export in Excel, XML, CSV, and TSV formats', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Schedule automated import & export', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Advanced filters and customizations for better control', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Export and Import custom fields and third - party plugins fields', 'order-import-export-for-woocommerce'); ?></li>
 									</ul>
 								</div>
 							</div>
@@ -53,7 +53,7 @@ if (!defined('ABSPATH')) {
 
 						<div class="wt-ierpro-mainfeatures">
 							<div class="wt-ierpro-btn-wrapper" style="margin-right: -17px">
-								<a href="<?php echo esc_url("https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=Order_Import_Export&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php esc_html_e('Check out plugin'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
+								<a href="<?php echo esc_url("https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=Order_Import_Export&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php esc_html_e('Check out plugin', 'order-import-export-for-woocommerce'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
 							</div>
 						</div>
 
@@ -66,21 +66,21 @@ if (!defined('ABSPATH')) {
 				<div class="ier-premium-upgrade wt-ierpro-sidebar">
 					<div class="wt-ierpro-header" style="width:95%">
 						<div class="wt-ierpro-name">
-							<div style="float: left"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/product-ie.svg" alt="featured img" width="36" height="36"></div>
+							<div style="float: left"><img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/gopro/product-ie.svg" alt="featured img" width="36" height="36"></div>
 
 							<div style="float: right;width: calc(100% - 52px);">
-								<h4 class="wt-ier-product-name" ><?php _e('Product Import Export Plugin'); ?></h4>
-								<h4 class="wt-ier-product-name" style="line-height: 10px;"><?php _e('for WooCommerce'); ?></h4>
+								<h4 class="wt-ier-product-name" ><?php esc_html_e('Product Import Export Plugin', 'order-import-export-for-woocommerce'); ?></h4>
+								<h4 class="wt-ier-product-name" style="line-height: 10px;"><?php esc_html_e('for WooCommerce', 'order-import-export-for-woocommerce'); ?></h4>
 							</div>
-							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
+							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo esc_url( WT_O_IEW_PLUGIN_URL ); ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
 							<?php
 							/**
 							 * @since 2.5.8
 							 * Black Friday Cyber Monday banner offer
 							 */
-							if (true === Wt_Import_Export_For_Woo_Basic::is_bfcm_season()) {
+							if (true === Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season()) {
 
-							?><div class="wtier-bfcm-banner-2024-offer" style="position: absolute; top: 0;right: 0;">
+							?><div class="wtier-bfcm-banner-2025-offer" style="position: absolute; top: 0;right: 0;">
 									<svg width="31" height="40" viewBox="0 0 31 40" fill="none" xmlns="http://www.w3.org/2000/svg">
 										<path d="M0 0H30.6977V40L15.3488 33.5849L0 40V0Z" fill="#FC4762" />
 										<path d="M11.1814 27.8613C10.7556 27.8613 10.363 27.752 10.0037 27.5332C9.64819 27.3145 9.36108 27.0234 9.14233 26.6602C8.92748 26.293 8.82006 25.8906 8.82006 25.4531L8.83178 21.6504C8.83178 21.2051 8.9392 20.8047 9.15405 20.4492C9.36498 20.0898 9.65014 19.8027 10.0095 19.5879C10.3689 19.3691 10.7595 19.2598 11.1814 19.2598C11.6189 19.2598 12.0115 19.3672 12.3591 19.582C12.7107 19.7969 12.9919 20.0859 13.2029 20.4492C13.4177 20.8086 13.5251 21.209 13.5251 21.6504L13.5369 25.4531C13.5369 25.8906 13.4314 26.291 13.2205 26.6543C13.0056 27.0215 12.7205 27.3145 12.365 27.5332C12.0095 27.752 11.615 27.8613 11.1814 27.8613ZM11.1814 26.4141C11.4236 26.4141 11.6345 26.3164 11.8142 26.1211C11.9939 25.9219 12.0837 25.6992 12.0837 25.4531L12.072 21.6504C12.072 21.3848 11.988 21.1602 11.8201 20.9766C11.6521 20.793 11.4392 20.7012 11.1814 20.7012C10.9353 20.7012 10.7244 20.791 10.5486 20.9707C10.3728 21.1504 10.2849 21.377 10.2849 21.6504V25.4531C10.2849 25.7148 10.3728 25.9414 10.5486 26.1328C10.7244 26.3203 10.9353 26.4141 11.1814 26.4141ZM15.8513 27.7441H14.5037C14.4646 27.7441 14.4451 27.7246 14.4451 27.6855L14.4685 19.4414C14.4685 19.4102 14.4841 19.3945 14.5154 19.3945H18.3591C18.3982 19.3945 18.4177 19.4102 18.4177 19.4414V20.7949C18.4177 20.8262 18.4021 20.8418 18.3708 20.8418H15.9099V22.7051H18.3708C18.4021 22.7051 18.4177 22.7246 18.4177 22.7637L18.4294 24.123C18.4294 24.1543 18.4099 24.1699 18.3708 24.1699H15.9099V27.6855C15.9099 27.7246 15.8904 27.7441 15.8513 27.7441ZM20.9021 27.7441H19.5544C19.5154 27.7441 19.4958 27.7246 19.4958 27.6855L19.5193 19.4414C19.5193 19.4102 19.5349 19.3945 19.5662 19.3945H23.4099C23.449 19.3945 23.4685 19.4102 23.4685 19.4414V20.7949C23.4685 20.8262 23.4529 20.8418 23.4216 20.8418H20.9607V22.7051H23.4216C23.4529 22.7051 23.4685 22.7246 23.4685 22.7637L23.4802 24.123C23.4802 24.1543 23.4607 24.1699 23.4216 24.1699H20.9607V27.6855C20.9607 27.7246 20.9412 27.7441 20.9021 27.7441Z" fill="white" />
@@ -95,12 +95,12 @@ if (!defined('ABSPATH')) {
 							<div class="wt-ier-suite-main-points">
 								<div class="wt-ier-suite-sub-points-left" style="float:left;margin-top: 12px;">
 									<ul class="ticked-list wt-ierpro-allfeat">
-										<li><?php _e('Export and import variable, subscription and custom product types'); ?></li>
-										<li><?php _e('Import via FTP/SFTP and URL'); ?></li>
-										<li><?php _e('Import & export in Excel, XML, CSV, and TSV formats'); ?></li>
-										<li><?php _e('Schedule automated import & export'); ?></li>
-										<li><?php _e('Advanced filters and customizations for better control'); ?></li>
-										<li><?php _e('Export and Import custom fields and third - party plugins fields'); ?></li>
+										<li><?php esc_html_e('Export and import variable, subscription and custom product types', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Import via FTP/SFTP and URL', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Import & export in Excel, XML, CSV, and TSV formats', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Schedule automated import & export', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Advanced filters and customizations for better control', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Export and Import custom fields and third - party plugins fields', 'order-import-export-for-woocommerce'); ?></li>
 									</ul>
 								</div>
 							</div>
@@ -108,7 +108,7 @@ if (!defined('ABSPATH')) {
 
 						<div class="wt-ierpro-mainfeatures">
 							<div class="wt-ierpro-btn-wrapper" style="margin-right: -17px">
-								<a href="<?php echo esc_url("https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php _e('Check out plugin'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
+								<a href="<?php echo esc_url("https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php esc_html_e('Check out plugin', 'order-import-export-for-woocommerce'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
 							</div>
 						</div>
 
@@ -120,22 +120,22 @@ if (!defined('ABSPATH')) {
 				<div class="ier-premium-upgrade wt-ierpro-sidebar">
 					<div class="wt-ierpro-header" style="width:95%;">
 						<div class="wt-ierpro-name">
-							<div style="float: left"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/user-ie.svg" alt="featured img" width="36" height="36"></div>
+							<div style="float: left"><img src="<?php echo esc_url( WT_O_IEW_PLUGIN_URL ); ?>assets/images/gopro/user-ie.svg" alt="featured img" width="36" height="36"></div>
 							<div style="float: right;width: calc(100% - 52px);">
-								<h4 class="wt-ier-product-name"><?php _e('WordPress Users &'); ?></h4>
-								<h4 class="wt-ier-product-name"style="line-height: 0px;"><?php _e('WooCommerce Customers'); ?></h4>
-								<h4 class="wt-ier-product-name" style="line-height: 20px;"><?php _e('Import Export'); ?></h4>
+								<h4 class="wt-ier-product-name"><?php esc_html_e('WordPress Users &', 'order-import-export-for-woocommerce'); ?></h4>
+								<h4 class="wt-ier-product-name"style="line-height: 0px;"><?php esc_html_e('WooCommerce Customers', 'order-import-export-for-woocommerce'); ?></h4>
+								<h4 class="wt-ier-product-name" style="line-height: 20px;"><?php esc_html_e('Import Export', 'order-import-export-for-woocommerce'); ?></h4>
 
 							</div>
-							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
+							<div class="wt-crown-image" style="position: absolute;top: -21px;right: -24px;z-index: 1000;"><img src="<?php echo esc_url( WT_O_IEW_PLUGIN_URL ); ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
 							<?php
 							/**
 							 * @since 2.5.8
 							 * Black Friday Cyber Monday banner offer
 							 */
-							if (true === Wt_Import_Export_For_Woo_Basic::is_bfcm_season()) {
+							if (true === Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season()) {
 
-							?><div class="wtier-bfcm-banner-2024-offer" style="position: absolute; top: 0;right: 0;">
+							?><div class="wtier-bfcm-banner-2025-offer" style="position: absolute; top: 0;right: 0;">
 									<svg width="31" height="40" viewBox="0 0 31 40" fill="none" xmlns="http://www.w3.org/2000/svg">
 										<path d="M0 0H30.6977V40L15.3488 33.5849L0 40V0Z" fill="#FC4762" />
 										<path d="M11.1814 27.8613C10.7556 27.8613 10.363 27.752 10.0037 27.5332C9.64819 27.3145 9.36108 27.0234 9.14233 26.6602C8.92748 26.293 8.82006 25.8906 8.82006 25.4531L8.83178 21.6504C8.83178 21.2051 8.9392 20.8047 9.15405 20.4492C9.36498 20.0898 9.65014 19.8027 10.0095 19.5879C10.3689 19.3691 10.7595 19.2598 11.1814 19.2598C11.6189 19.2598 12.0115 19.3672 12.3591 19.582C12.7107 19.7969 12.9919 20.0859 13.2029 20.4492C13.4177 20.8086 13.5251 21.209 13.5251 21.6504L13.5369 25.4531C13.5369 25.8906 13.4314 26.291 13.2205 26.6543C13.0056 27.0215 12.7205 27.3145 12.365 27.5332C12.0095 27.752 11.615 27.8613 11.1814 27.8613ZM11.1814 26.4141C11.4236 26.4141 11.6345 26.3164 11.8142 26.1211C11.9939 25.9219 12.0837 25.6992 12.0837 25.4531L12.072 21.6504C12.072 21.3848 11.988 21.1602 11.8201 20.9766C11.6521 20.793 11.4392 20.7012 11.1814 20.7012C10.9353 20.7012 10.7244 20.791 10.5486 20.9707C10.3728 21.1504 10.2849 21.377 10.2849 21.6504V25.4531C10.2849 25.7148 10.3728 25.9414 10.5486 26.1328C10.7244 26.3203 10.9353 26.4141 11.1814 26.4141ZM15.8513 27.7441H14.5037C14.4646 27.7441 14.4451 27.7246 14.4451 27.6855L14.4685 19.4414C14.4685 19.4102 14.4841 19.3945 14.5154 19.3945H18.3591C18.3982 19.3945 18.4177 19.4102 18.4177 19.4414V20.7949C18.4177 20.8262 18.4021 20.8418 18.3708 20.8418H15.9099V22.7051H18.3708C18.4021 22.7051 18.4177 22.7246 18.4177 22.7637L18.4294 24.123C18.4294 24.1543 18.4099 24.1699 18.3708 24.1699H15.9099V27.6855C15.9099 27.7246 15.8904 27.7441 15.8513 27.7441ZM20.9021 27.7441H19.5544C19.5154 27.7441 19.4958 27.7246 19.4958 27.6855L19.5193 19.4414C19.5193 19.4102 19.5349 19.3945 19.5662 19.3945H23.4099C23.449 19.3945 23.4685 19.4102 23.4685 19.4414V20.7949C23.4685 20.8262 23.4529 20.8418 23.4216 20.8418H20.9607V22.7051H23.4216C23.4529 22.7051 23.4685 22.7246 23.4685 22.7637L23.4802 24.123C23.4802 24.1543 23.4607 24.1699 23.4216 24.1699H20.9607V27.6855C20.9607 27.7246 20.9412 27.7441 20.9021 27.7441Z" fill="white" />
@@ -150,12 +150,12 @@ if (!defined('ABSPATH')) {
 							<div class="wt-ier-suite-main-points">
 								<div class="wt-ier-suite-sub-points-left" style="float:left; margin-top: 10px">
 									<ul class="ticked-list wt-ierpro-allfeat">
-										<li><?php _e('Import via FTP/SFTP and URL'); ?></li>
-										<li><?php _e('Import & export in Excel, XML, CSV, and TSV formats'); ?></li>
-										<li><?php _e('Customize and send emails to new users on import'); ?></li>
-										<li><?php _e('Schedule automated import & export'); ?></li>
-										<li><?php _e('Advanced filters and customizations for better control'); ?></li>
-										<li><?php _e('Export and Import custom fields and third - party plugins fields'); ?></li>
+										<li><?php esc_html_e('Import via FTP/SFTP and URL', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Import & export in Excel, XML, CSV, and TSV formats', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Customize and send emails to new users on import', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Schedule automated import & export', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Advanced filters and customizations for better control', 'order-import-export-for-woocommerce'); ?></li>
+										<li><?php esc_html_e('Export and Import custom fields and third - party plugins fields', 'order-import-export-for-woocommerce'); ?></li>
 									</ul>
 								</div>
 							</div>
@@ -163,7 +163,7 @@ if (!defined('ABSPATH')) {
 
 						<div class="wt-ierpro-mainfeatures">
 							<div class="wt-ierpro-btn-wrapper" style="margin-right: -17px;">
-								<a href="<?php echo esc_url("https://www.webtoffee.com/product/wordpress-users-woocommerce-customers-import-export/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=User_Import_Export&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php _e('Check out plugin'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
+								<a href="<?php echo esc_url("https://www.webtoffee.com/product/wordpress-users-woocommerce-customers-import-export/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=User_Import_Export&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php esc_html_e('Check out plugin', 'order-import-export-for-woocommerce'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
 							</div>
 						</div>
 
@@ -173,22 +173,22 @@ if (!defined('ABSPATH')) {
 		</div>
 
 
-		<p style="font-size:14px;font-weight:500;margin-top: 53px;padding:2px 4px;"><?php _e('You may also Like'); ?></p>
+		<p style="font-size:14px;font-weight:500;margin-top: 53px;padding:2px 4px;"><?php esc_html_e('You may also Like', 'order-import-export-for-woocommerce'); ?></p>
 		<div class="wt-ierpro-header">
 			<div class="wt-ierpro-name-suite">
-				<div style="float: left"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/suite.svg" alt="featured img" width="36" height="36"></div>
+				<div style="float: left"><img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/gopro/suite.svg" alt="featured img" width="36" height="36"></div>
 				<div style="float: right;width: calc(100% - 52px);">
-					<h4 class="wt-ier-product-name"><?php _e('Import Export Suite for WooCommerce'); ?></h4>
+					<h4 class="wt-ier-product-name"><?php esc_html_e('Import Export Suite for WooCommerce', 'order-import-export-for-woocommerce'); ?></h4>
 				</div>
-				<div class="wt-crown-image" style="position: absolute;top: -28px;right: -24px;z-index: 1000;"><img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
+				<div class="wt-crown-image" style="position: absolute;top: -28px;right: -24px;z-index: 1000;"><img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/gopro/crown.svg" alt="featured img" width="36" height="36"></div>
 				<?php
 				/**
 				 * @since 2.5.8
 				 * Black Friday Cyber Monday banner offer
 				 */
-				if (true === Wt_Import_Export_For_Woo_Basic::is_bfcm_season()) {
+				if (true === Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season()) {
 
-				?><div class="wtier-bfcm-banner-2024-offer" style="position: absolute; top:-8px ;right: 0;">
+				?><div class="wtier-bfcm-banner-2025-offer" style="position: absolute; top:-8px ;right: 0;">
 						<svg width="31" height="40" viewBox="0 0 31 40" fill="none" xmlns="http://www.w3.org/2000/svg">
 							<path d="M0 0H30.6977V40L15.3488 33.5849L0 40V0Z" fill="#FC4762" />
 							<path d="M11.1814 27.8613C10.7556 27.8613 10.363 27.752 10.0037 27.5332C9.64819 27.3145 9.36108 27.0234 9.14233 26.6602C8.92748 26.293 8.82006 25.8906 8.82006 25.4531L8.83178 21.6504C8.83178 21.2051 8.9392 20.8047 9.15405 20.4492C9.36498 20.0898 9.65014 19.8027 10.0095 19.5879C10.3689 19.3691 10.7595 19.2598 11.1814 19.2598C11.6189 19.2598 12.0115 19.3672 12.3591 19.582C12.7107 19.7969 12.9919 20.0859 13.2029 20.4492C13.4177 20.8086 13.5251 21.209 13.5251 21.6504L13.5369 25.4531C13.5369 25.8906 13.4314 26.291 13.2205 26.6543C13.0056 27.0215 12.7205 27.3145 12.365 27.5332C12.0095 27.752 11.615 27.8613 11.1814 27.8613ZM11.1814 26.4141C11.4236 26.4141 11.6345 26.3164 11.8142 26.1211C11.9939 25.9219 12.0837 25.6992 12.0837 25.4531L12.072 21.6504C12.072 21.3848 11.988 21.1602 11.8201 20.9766C11.6521 20.793 11.4392 20.7012 11.1814 20.7012C10.9353 20.7012 10.7244 20.791 10.5486 20.9707C10.3728 21.1504 10.2849 21.377 10.2849 21.6504V25.4531C10.2849 25.7148 10.3728 25.9414 10.5486 26.1328C10.7244 26.3203 10.9353 26.4141 11.1814 26.4141ZM15.8513 27.7441H14.5037C14.4646 27.7441 14.4451 27.7246 14.4451 27.6855L14.4685 19.4414C14.4685 19.4102 14.4841 19.3945 14.5154 19.3945H18.3591C18.3982 19.3945 18.4177 19.4102 18.4177 19.4414V20.7949C18.4177 20.8262 18.4021 20.8418 18.3708 20.8418H15.9099V22.7051H18.3708C18.4021 22.7051 18.4177 22.7246 18.4177 22.7637L18.4294 24.123C18.4294 24.1543 18.4099 24.1699 18.3708 24.1699H15.9099V27.6855C15.9099 27.7246 15.8904 27.7441 15.8513 27.7441ZM20.9021 27.7441H19.5544C19.5154 27.7441 19.4958 27.7246 19.4958 27.6855L19.5193 19.4414C19.5193 19.4102 19.5349 19.3945 19.5662 19.3945H23.4099C23.449 19.3945 23.4685 19.4102 23.4685 19.4414V20.7949C23.4685 20.8262 23.4529 20.8418 23.4216 20.8418H20.9607V22.7051H23.4216C23.4529 22.7051 23.4685 22.7246 23.4685 22.7637L23.4802 24.123C23.4802 24.1543 23.4607 24.1699 23.4216 24.1699H20.9607V27.6855C20.9607 27.7246 20.9412 27.7441 20.9021 27.7441Z" fill="white" />
@@ -200,30 +200,27 @@ if (!defined('ABSPATH')) {
 
 			</div>
 			<div class="wt-ier-all-in-one-text">
-				<p class="wt-ier-all-in-one-text-sp"><?php esc_html_e('An All-In-One Plugin Bundle for Importing and Exporting All Your WooCommerce Store Data'); ?></p>
+				<p class="wt-ier-all-in-one-text-sp"><?php esc_html_e('An All-In-One Plugin Bundle for Importing and Exporting All Your WooCommerce Store Data', 'order-import-export-for-woocommerce'); ?></p>
 			</div>
 
 			<div class="wt-ierpro-mainfeatures">
 				<div class="wt-ierpro-btn-wrapper">
-					<a href="<?php echo esc_url("https://www.webtoffee.com/product/woocommerce-import-export-suite/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=Import_Export_Suite&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php _e('Check out plugin'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
+					<a href="<?php echo esc_url("https://www.webtoffee.com/product/woocommerce-import-export-suite/?utm_source=free_plugin_revamp&utm_medium=basic_revamp&utm_campaign=Import_Export_Suite&utm_content=" . WT_O_IEW_VERSION); ?>" class="wt-ierpro-blue-btn-suite" target="_blank"><?php esc_html_e('Check out plugin', 'order-import-export-for-woocommerce'); ?> <span style="font-size: 18px;" class="dashicons dashicons-arrow-right-alt"></span></a>
 				</div>
 			</div>
-			<p style="font-size:14px;font-weight:600; margin-left:10px;margin-top: auto;padding:2px 4px;"><?php _e('Try with Confidence'); ?></p>
+			<p style="font-size:14px;font-weight:600; margin-left:10px;margin-top: auto;padding:2px 4px;"><?php esc_html_e('Try with Confidence', 'order-import-export-for-woocommerce'); ?></p>
 
 			<div class="wt-cs-rating-money-back">
 				<div class="wt-money-back">
-					<img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/upgrade/wt-money-back.svg" alt="alt" />
-					<p><?php esc_html_e('100% No Risk Money Back Guarantee'); ?></p>
+					<img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/upgrade/wt-money-back.svg" alt="alt" />
+					<p><?php esc_html_e('100% No Risk Money Back Guarantee', 'order-import-export-for-woocommerce'); ?></p>
 				</div>
 				<div class="wt-cs-rating">
-					<img src="<?php echo WT_O_IEW_PLUGIN_URL; ?>assets/images/upgrade/wt-satisfaction-rating.svg" alt=" alt" />
-					<p><?php esc_html_e('Fast and Priority Support with 99% Satisfaction Rating'); ?></p>
+					<img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL); ?>assets/images/upgrade/wt-satisfaction-rating.svg" alt=" alt" />
+					<p><?php esc_html_e('Fast and Priority Support with 99% Satisfaction Rating', 'order-import-export-for-woocommerce'); ?></p>
 				</div>
 			</div>
 
 		</div>
-
-
-
 	</div>
 </div>

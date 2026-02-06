@@ -52,7 +52,7 @@ $base_reserved_columns = array(
     'shipping_state' => array('title' => 'Shipping state', 'description' => 'shipping_state'),
     'shipping_country' => array('title' => 'Shipping country', 'description' => 'shipping_country'),
     'customer_note' => array('title' => 'Customer note', 'description' => 'customer_note'),
-    'wt_import_key' => array('title' => 'wt_impor_key', 'description' => 'wt_import_key'),
+    'wt_import_key' => array('title' => 'wt_import_key', 'description' => 'wt_import_key'),
     'tax_items' => array('title' => 'Tax items', 'description' => 'tax_items'),
     'shipping_items' => array('title' => 'Shipping items', 'description' => 'shipping_items'),
     'fee_items' => array('title' => 'Fee items', 'description' => 'fee_items'),

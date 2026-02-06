@@ -5,7 +5,7 @@
  *
  * @link            
  *
- * @package  Wt_Import_Export_For_Woo_Basic 
+ * @package  Wt_Import_Export_For_Woo_Order_Basic 
  */
 if (!defined('ABSPATH')) {
     exit;
@@ -13,8 +13,8 @@ if (!defined('ABSPATH')) {
 
 use Automattic\WooCommerce\Utilities\OrderUtil;
 
-if(!class_exists('Wt_Import_Export_For_Woo_Basic_Order')){
-class Wt_Import_Export_For_Woo_Basic_Order {
+if(!class_exists('Wt_Import_Export_For_Woo_Order_Basic_Order')){
+class Wt_Import_Export_For_Woo_Order_Basic_Order {
 
     public $module_id = '';
     public static $module_id_static = '';
@@ -35,7 +35,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         /**
         *   Checking the minimum required version of `Import export plugin` plugin available
         */
-        if(!Wt_Import_Export_For_Woo_Basic_Common_Helper::check_base_version($this->module_base, $this->module_name, $this->min_base_version))
+        if(!Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::check_base_version($this->module_base, $this->module_name, $this->min_base_version))
         {
             return;
         }
@@ -43,12 +43,12 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         {
             include_once(ABSPATH.'wp-admin/includes/plugin.php');
         }
-        if(!is_plugin_active('woocommerce/woocommerce.php'))
+        if ( ! class_exists( 'WooCommerce' ) )
         {
             return;
         }
        
-        $this->module_id = Wt_Import_Export_For_Woo_Basic::get_module_id($this->module_base);
+        $this->module_id = Wt_Import_Export_For_Woo_Order_Basic::get_module_id($this->module_base);
         self::$module_id_static = $this->module_id;
                 
         add_filter('wt_iew_exporter_post_types_basic', array($this, 'wt_iew_exporter_post_types_basic'), 10, 1);
@@ -75,27 +75,108 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         add_filter('wt_iew_importer_steps_basic', array($this, 'importer_steps'), 10, 2);
 		
 		
-		add_action('admin_footer-edit.php', array($this, 'wt_add_order_bulk_actions'));
+        // Legacy (post-based) bulk actions
+        // Use filter for WordPress 3.1.0+ (filter was added in WordPress 3.1.0)
+        // Fallback to JavaScript for WordPress 3.0.1.
+        global $wp_version;
+        if ( version_compare( $wp_version, '3.1.0', '>=' ) ) {
+            add_filter( 'bulk_actions-edit-shop_order', array( $this, 'wt_add_legacy_bulk_actions' ) );
+        } else {
+            // Fallback for very old WordPress versions (3.0.1)
+            add_action( 'admin_footer-edit.php', array( $this, 'wt_add_order_bulk_actions_js_fallback' ) );
+        }        
         add_action('load-edit.php', array($this, 'wt_process_order_bulk_actions'));
+
+        // HPOS support for bulk actions
+        add_filter('bulk_actions-woocommerce_page_wc-orders', array($this, 'wt_add_hpos_bulk_actions'));
+        add_filter('handle_bulk_actions-woocommerce_page_wc-orders', array($this, 'wt_process_hpos_order_bulk_actions'), 10, 3);
+		
     }
 
-	
-	
-	
-    public function wt_add_order_bulk_actions() {
+    /**
+     * Add bulk action for legacy (post-based) orders page
+     * Uses WordPress filter (available since WordPress 3.1.0)
+     * 
+     * @param array $actions Existing bulk actions
+     * @return array Modified bulk actions
+     */
+    public function wt_add_legacy_bulk_actions($actions) {
+        global $post_status;
+        
+        // Only add if not in trash
+        if ( 'trash'  !== $post_status ) {
+            $actions['wt_ier_download_orders'] = __('Export as CSV', 'order-import-export-for-woocommerce');
+        }
+        
+        return $actions;
+    }
+    
+    /**
+     * Fallback JavaScript method for very old WordPress versions (3.0.1)
+     * Only used if WordPress version is below 3.1.0 (when filter was introduced)
+     * 
+     * @return void
+     */
+    public function wt_add_order_bulk_actions_js_fallback() {
         global $post_type, $post_status;
 
         if ( 'shop_order' === $post_type && 'trash' !== $post_status && !is_plugin_active( 'wt-import-export-for-woo/wt-import-export-for-woo.php' )) {
             ?>
             <script type="text/javascript">
                 jQuery(document).ready(function ($) {
-                    var $downloadOrders = $('<option>').val('wt_ier_download_orders').text('<?php _e('Export to CSV') ?>');
+                    var $downloadOrders = $('<option>').val('wt_ier_download_orders').text('<?php esc_html_e('Export to CSV', 'order-import-export-for-woocommerce') ?>');
                     $('select[name^="action"]').append($downloadOrders);
                 });
             </script>
             <?php
         }
     }
+
+     /**
+     * Add bulk action for HPOS orders page
+     * 
+     * @param array $actions Existing bulk actions
+     * @return array Modified bulk actions
+     */
+    public function wt_add_hpos_bulk_actions($actions) {
+        $actions['wt_ier_download_orders'] = __('Export as CSV', 'order-import-export-for-woocommerce');
+        return $actions;
+    }
+      
+    /**
+     * Process HPOS order bulk export action
+     * 
+     * @param string $redirect_url Redirect URL after processing
+     * @param string $action Action being performed
+     * @param array $order_ids Array of order IDs
+     * @return string Modified redirect URL
+     */
+    public function wt_process_hpos_order_bulk_actions($redirect_url, $action, $order_ids) {
+        if ( 'wt_ier_download_orders' !== $action  || empty( $order_ids ) || ! is_array( $order_ids ) ) {
+            return $redirect_url;
+        }
+                
+        // Security check
+        check_admin_referer('bulk-orders');
+        
+        // Convert order IDs to integers
+        $order_ids = array_map( 'absint', $order_ids );
+        
+        if ( empty( $order_ids) ) {
+            return $redirect_url;
+        }
+        
+        // Give an unlimited timeout if possible
+        // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Its necessary to set time limit.
+        @set_time_limit(0);
+        
+        include_once( 'export/class-wt-orderimpexpcsv-basic-exporter.php' );
+        Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export::do_export( 'shop_order', $order_ids );
+        
+        // Return empty to prevent redirect (export will handle it)
+        return '';
+    }
+
     
     /**
      * Order page bulk export action
@@ -120,13 +201,14 @@ class Wt_Import_Export_For_Woo_Basic_Order {
                 return;
             }
             // give an unlimited timeout if possible
+            // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Its necessary to set time limit.
             @set_time_limit(0);
 
             if ($action == 'wt_ier_download_orders') {
                 
                 
                 include_once( 'export/class-wt-orderimpexpcsv-basic-exporter.php' );
-                Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export::do_export('shop_order', $order_ids);
+                Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export::do_export('shop_order', $order_ids);
             }
         }
     }
@@ -138,7 +220,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
     {
         if($this->module_base==$base)
         {
-            $steps['advanced']['description']=__('Use options from below to decide updates to existing orders, batch import count. You can also save the template file for future imports.');
+            $steps['advanced']['description']=__('Use options from below to decide updates to existing orders, batch import count. You can also save the template file for future imports.', 'order-import-export-for-woocommerce');
         }
         return $steps;
     }
@@ -151,16 +233,16 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         if(0 == $batch_offset){                        
             $memory = size_format(wt_let_to_num_basic(ini_get('memory_limit')));
             $wp_memory = size_format(wt_let_to_num_basic(WP_MEMORY_LIMIT));                      
-            Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->module_base, 'import', '---[ New import started at '.date('Y-m-d H:i:s').' ] PHP Memory: ' . $memory . ', WP Memory: ' . $wp_memory);
+            Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->module_base, 'import', '---[ New import started at '.wp_date('Y-m-d H:i:s').' ] PHP Memory: ' . $memory . ', WP Memory: ' . $wp_memory);
         }
                 
         include plugin_dir_path(__FILE__) . 'import/import.php';
-        $import = new Wt_Import_Export_For_Woo_Basic_Order_Import($this);
+        $import = new Wt_Import_Export_For_Woo_Order_Basic_Order_Import($this);
         
         $response = $import->prepare_data_to_import($import_data,$form_data,$batch_offset,$is_last_batch);
         
         if($is_last_batch){
-            Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->module_base, 'import', '---[ Import ended at '.date('Y-m-d H:i:s').']---');
+            Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->module_base, 'import', '---[ Import ended at '.wp_date('Y-m-d H:i:s').']---');
         }
         
         return $response;
@@ -186,7 +268,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         }
 
         include plugin_dir_path(__FILE__) . 'export/export.php';
-        $export = new Wt_Import_Export_For_Woo_Basic_Order_Export($this);
+        $export = new Wt_Import_Export_For_Woo_Order_Basic_Order_Export($this);
                       
         $data_row = $export->prepare_data_to_export($form_data, $batch_offset);
         
@@ -283,7 +365,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         if ($base == $this->module_base) {
             $mapping_enabled_fields = array();
 
-            $mapping_enabled_fields['hidden_meta'] = array(__('Hidden meta'), 0);
+            $mapping_enabled_fields['hidden_meta'] = array(__('Hidden meta', 'order-import-export-for-woocommerce'), 0);
 
             if ( ! function_exists( 'is_plugin_active' ) ) {
                 include_once( ABSPATH . 'wp-admin/includes/plugin.php' );
@@ -427,9 +509,24 @@ class Wt_Import_Export_For_Woo_Basic_Order {
                 WHERE wm.meta_key LIKE '_%'
                 LIMIT 1
             ";
-    
-            return $wpdb->get_var($query) !== null;
-        } 
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Its necessary to use direct database query.
+            $result = $wpdb->get_var($query);
+            // phpcs:enable
+            return $result !== null;
+        } else {
+            // Legacy post-based orders
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
+            $result = $wpdb->get_var("
+                SELECT 1
+                FROM {$wpdb->postmeta} pm
+                JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                WHERE pm.meta_key LIKE '_%'
+                AND p.post_type IN ('shop_order', 'shop_order_placehold')
+                LIMIT 1
+            ");
+            // phpcs:enable
+            return $result !== null;
+        }
     }
 
     public function wt_get_exclude_hidden_meta_columns() {
@@ -462,6 +559,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
      */
     public static function get_all_metakeys($post_type = 'shop_order') {
         global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
         $meta = $wpdb->get_col($wpdb->prepare(
                         "SELECT DISTINCT pm.meta_key
             FROM {$wpdb->postmeta} AS pm
@@ -469,7 +567,7 @@ class Wt_Import_Export_For_Woo_Basic_Order {
             WHERE p.post_type = %s
             AND p.post_status IN ( 'wc-pending', 'wc-processing', 'wc-on-hold', 'wc-completed', 'wc-cancelled', 'wc-refunded', 'wc-failed' ) ORDER BY pm.meta_key", $post_type
         ));
-        //sort($meta);
+        // phpcs:enable
         return $meta;
     }
 
@@ -513,24 +611,24 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 			'tr_html' => '<tr id="header_empty_row"><th></th><td></td></tr>'
 		);
         $out['exclude_already_exported'] = array(
-            'label' => __("Exclude already exported"),
+            'label' => __("Exclude already exported", 'order-import-export-for-woocommerce'),
             'type' => 'checkbox',
-			'checkbox_fields' => array( 1 => __( 'Enable' ) ),
+			'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
             'value' => 0,
             'field_name' => 'exclude_already_exported',
-            'help_text' => __('Enable this to exclude the previously exported orders.'),
+            'help_text' => __('Enable this to exclude the previously exported orders.', 'order-import-export-for-woocommerce'),
         );
 
         $out['exclude_line_items'] = array(
-            'label' => __("Exclude line items"),
+            'label' => __("Exclude line items", 'order-import-export-for-woocommerce'),
             'type' => 'radio',
             'radio_fields' => array(
-                'Yes' => __('Yes', 'wt-import-export-for-woo'),
-                'No' => __('No', 'wt-import-export-for-woo')
+                'Yes' => __('Yes', 'order-import-export-for-woocommerce'),
+                'No' => __('No', 'order-import-export-for-woocommerce')
             ),
             'value' => 'No',
             'field_name' => 'exclude_line_items',
-            'help_text' => __("Option 'Yes' excludes the line items"),
+            'help_text' => __("Option 'Yes' excludes the line items", 'order-import-export-for-woocommerce'),
             'form_toggler'=>array(
                 'type'=>'parent',
                 'target'=>'wt_iew_exclude_line_items',
@@ -538,12 +636,12 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         );
         
         $out['export_to_separate'] = array(
-            'label' => __("Export line items in"),
+            'label' => __("Export line items in", 'order-import-export-for-woocommerce'),
             'type' => 'radio',
             'radio_fields' => array(
-                'default' => __('Migration mode'),
-                'column' => __('Separate columns'),
-                'row' => __('Separate rows')    
+                'default' => __('Migration mode', 'order-import-export-for-woocommerce'),
+                'column' => __('Separate columns', 'order-import-export-for-woocommerce'),
+                'row' => __('Separate rows', 'order-import-export-for-woocommerce')    
             ),
             'value' => 'column',
             'merge_right'=>true,
@@ -551,19 +649,19 @@ class Wt_Import_Export_For_Woo_Basic_Order {
             //'help_text' => __("Option 'Yes' exports the line items within the order into separate columns in the exported file."),
             'help_text_conditional'=>array(
                 array(
-                    'help_text'=> __('This option will export each line item details into a single column. This option is mainly used for the order migration purpose.'),
+                    'help_text'=> __('This option will export each line item details into a single column. This option is mainly used for the order migration purpose.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_export_to_separate', 'value'=>'default')
                     )
                 ),
                 array(
-                    'help_text'=> __('This option will export each line item details into a separate column.'),
+                    'help_text'=> __('This option will export each line item details into a separate column.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_export_to_separate', 'value'=>'column')
                     )
                 ),
                 array(
-                    'help_text'=> __('This option will export each line item details into a separate row.'),
+                    'help_text'=> __('This option will export each line item details into a separate row.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_export_to_separate', 'value'=>'row')
                     )
@@ -594,24 +692,24 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 			'tr_html' => '<tr id="header_empty_row"><th></th><td></td></tr>'
 		);
         $out['found_action_merge'] = array(
-            'label' => __("If order exists in the store"),
+            'label' => __("If order exists in the store", 'order-import-export-for-woocommerce'),
             'type' => 'radio',
             'radio_fields' => array(
-                'skip' => __('Skip'),
-                'update' => __('Update'),                
+                'skip' => __('Skip', 'order-import-export-for-woocommerce'),
+                'update' => __('Update', 'order-import-export-for-woocommerce'),                
             ),
             'value' => 'skip',
             'field_name' => 'found_action',
-            'help_text' => __('Orders are matched by their order IDs.'),
+            'help_text' => __('Orders are matched by their order IDs.', 'order-import-export-for-woocommerce'),
             'help_text_conditional'=>array(
                 array(
-                    'help_text'=> __('This option will not update the existing orders and keeps the order as is.'),
+                    'help_text'=> __('This option will not update the existing orders and keeps the order as is.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_found_action', 'value'=>'skip')
                     )
                 ),
                 array(
-                    'help_text'=> __('This option will update the existing orders as per the data from the input file.'),
+                    'help_text'=> __('This option will update the existing orders as per the data from the input file.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_found_action', 'value'=>'update')
                     )
@@ -624,24 +722,24 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         );       
         
         $out['ord_link_using_sku'] = array(
-            'label' => __('Link order items using'),
+            'label' => __('Link order items using', 'order-import-export-for-woocommerce'),
             'type' => 'radio',
             'radio_fields' => array(
-                '0' => __('Product ID'),				
-                '1' => __('Product SKU')
+                '0' => __('Product ID', 'order-import-export-for-woocommerce'),				
+                '1' => __('Product SKU', 'order-import-export-for-woocommerce')
             ),
             'value' => '0',
             'field_name' => 'ord_link_using_sku',
 			'merge_right' => true,
             'help_text_conditional'=>array(
                 array(
-                    'help_text'=> __('Links the products of the imported orders by SKU.'),
+                    'help_text'=> __('Links the products of the imported orders by SKU.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_ord_link_using_sku', 'value'=>1)
                     )
                 ),
                 array(
-                    'help_text'=> __('Links the products of the imported orders by Product ID. However, the products will not get linked if the Product ID conflicts with the IDs of an existing post type.'),
+                    'help_text'=> __('Links the products of the imported orders by Product ID. However, the products will not get linked if the Product ID conflicts with the IDs of an existing post type.', 'order-import-export-for-woocommerce'),
                     'condition'=>array(
                         array('field'=>'wt_iew_ord_link_using_sku', 'value'=>0)
                     )
@@ -651,18 +749,18 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 		if( !is_plugin_active( 'product-import-export-for-woo/product-import-export-for-woo.php' ) ){
 					$out['ord_link_using_sku']['help_text'] = sprintf(
 						/* translators: %s: Product Import Export for WooCommerce plugin  URL */
-						__( 'If you do not already have corresponding products added in your store, we recommend that you import them first using <a href="%s" target="_blank">Product Import Export for WooCommerce</a>.' ),
+						__( 'If you do not already have corresponding products added in your store, we recommend that you import them first using <a href="%s" target="_blank">Product Import Export for WooCommerce</a>.', 'order-import-export-for-woocommerce' ),
 						admin_url('plugin-install.php?tab=plugin-information&plugin=product-import-export-for-woo')
 					);
 		 }
         
 		$out['update_stock_details'] = array(
-            'label' => __("Update stock details"),
+            'label' => __("Update stock details", 'order-import-export-for-woocommerce'),
             'type' => 'checkbox',
-			'checkbox_fields' => array( 1 => __( 'Enable' ) ),
+			'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
             'value' => 0,
             'field_name' => 'update_stock_details',
-            'help_text' => __('Select to update the sale count and stock quantity of a product associated with the order.<br/>Note: Ensure the manage stock option is enabled. This feature is not meant to work for the refunded, cancelled or failed order statuses.'),
+            'help_text' => __('Select to update the sale count and stock quantity of a product associated with the order.<br/>Note: Ensure the manage stock option is enabled. This feature is not meant to work for the refunded, cancelled or failed order statuses.', 'order-import-export-for-woocommerce'),
         );
         
         foreach ($fields as $fieldk => $fieldv) {
@@ -679,68 +777,68 @@ class Wt_Import_Export_For_Woo_Basic_Order {
         if ($base == $this->module_base)
         {
             /* altering help text of default fields */
-            $fields['limit']['label']=__('Total number of orders to export'); 
-            $fields['limit']['help_text']=__( 'Provide the number of orders you want to export. e.g. Entering 500 with a skip count of 10 will export orders from 11th to 510th position.' );
-            $fields['offset']['label']=__('Skip first <i>n</i> orders');
-            $fields['offset']['help_text']=__('Skips specified number of orders from the beginning of the database. e.g. Enter 10 to skip first 10 orders from export.');
+            $fields['limit']['label']=__('Total number of orders to export', 'order-import-export-for-woocommerce'); 
+            $fields['limit']['help_text']=__( 'Provide the number of orders you want to export. e.g. Entering 500 with a skip count of 10 will export orders from 11th to 510th position.', 'order-import-export-for-woocommerce' );
+            $fields['offset']['label']=__('Skip first <i>n</i> orders', 'order-import-export-for-woocommerce');
+            $fields['offset']['help_text']=__('Skips specified number of orders from the beginning of the database. e.g. Enter 10 to skip first 10 orders from export.', 'order-import-export-for-woocommerce');
 
             $fields['orders'] = array(
-                'label' => __('Order IDs'),
-                'placeholder' => __('Enter order IDs separated by ,'),
+                'label' => __('Order IDs', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Enter order IDs separated by ,', 'order-import-export-for-woocommerce'),
                 'field_name' => 'orders',
                 'sele_vals' => '',
-                'help_text' => __('Enter order IDs separated by comma to export specific orders.'),
+                'help_text' => __('Enter order IDs separated by comma to export specific orders.', 'order-import-export-for-woocommerce'),
                 'type' => 'text',
                 'css_class' => '',
             );
             
             $fields['order_status'] = array(
-                'label' => __('Order status'),
-                'placeholder' => __('Any status'),
+                'label' => __('Order status', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Any status', 'order-import-export-for-woocommerce'),
                 'field_name' => 'order_status',
                 'sele_vals' => self::get_order_statuses(),
-                'help_text' => __( 'Filter orders on the basis of status. Multiple statuses can be selected.' ),
+                'help_text' => __( 'Filter orders on the basis of status. Multiple statuses can be selected.', 'order-import-export-for-woocommerce' ),
                 'type' => 'multi_select',
                 'css_class' => 'wc-enhanced-select',
                 'validation_rule' => array('type'=>'text_arr')
             );
             $fields['products'] = array(
-                'label' => __('Product'),
-                'placeholder' => __('Search for a product&hellip;'),
+                'label' => __('Product', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Search for a product&hellip;', 'order-import-export-for-woocommerce'),
                 'field_name' => 'products',
                 'sele_vals' => array(),
-                'help_text' => __( 'Export orders containing specific products. Input name, ID or SKU of the products contained in the orders you want to export.' ),
+                'help_text' => __( 'Export orders containing specific products. Input name, ID or SKU of the products contained in the orders you want to export.', 'order-import-export-for-woocommerce' ),
                 'type' => 'multi_select',
                 'css_class' => 'wc-product-search',
                 'validation_rule' => array('type'=>'text_arr')
             );
             $fields['email'] = array(
-                'label' => __('Customer'),
-                'placeholder' => __('Search for a customer&hellip;'),
+                'label' => __('Customer', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Search for a customer&hellip;', 'order-import-export-for-woocommerce'),
                 'field_name' => 'email',
                 'sele_vals' => array(),
-                'help_text' => __( 'Export orders of specific customers. Input the customer name or email to specify the customers.' ),
+                'help_text' => __( 'Export orders of specific customers. Input the customer name or email to specify the customers.', 'order-import-export-for-woocommerce' ),
                 'type' => 'multi_select',
                 'css_class' => 'wc-customer-search',
                 'validation_rule' => array('type'=>'text_arr')
             );
             $fields['coupons'] = array(
-                'label' => __('Coupons'),
-                'placeholder' => __('Search for a coupon&hellip;'),
+                'label' => __('Coupons', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Search for a coupon&hellip;', 'order-import-export-for-woocommerce'),
                 'field_name' => 'coupons',
                 'sele_vals' => array(),
-                'help_text' => __( 'Exports orders redeemed with specific coupon codes. Multiple coupon codes can be selected.' ),
+                'help_text' => __( 'Exports orders redeemed with specific coupon codes. Multiple coupon codes can be selected.', 'order-import-export-for-woocommerce' ),
                 'type' => 'multi_select',
                 'css_class' => 'wt-coupon-search',
 				'validation_rule' => array('type'=>'text_arr')
             );
 
             $fields['date_from'] = array(
-                'label' => __('Date from'),
-                'placeholder' => __('Date from'),
+                'label' => __('Date from', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Date from', 'order-import-export-for-woocommerce'),
                 'field_name' => 'date_from',
                 'sele_vals' => '',
-                'help_text' => __( 'Export orders placed on and after the specified date.' ),
+                'help_text' => __( 'Export orders placed on and after the specified date.', 'order-import-export-for-woocommerce' ),
                 'type' => 'text',
                 'css_class' => 'wt_iew_datepicker',
 //                'type' => 'field_html',
@@ -748,11 +846,11 @@ class Wt_Import_Export_For_Woo_Basic_Order {
             );
 
             $fields['date_to'] = array(
-                'label' => __('Date to'),
-                'placeholder' => __('Date to'),
+                'label' => __('Date to', 'order-import-export-for-woocommerce'),
+                'placeholder' => __('Date to', 'order-import-export-for-woocommerce'),
                 'field_name' => 'date_to',
                 'sele_vals' => '',
-                'help_text' => __( 'Export orders placed upto the specified date.' ),
+                'help_text' => __( 'Export orders placed upto the specified date.', 'order-import-export-for-woocommerce' ),
                 'type' => 'text',
                 'css_class' => 'wt_iew_datepicker',
 //                'type' => 'field_html',
@@ -766,13 +864,15 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 
     public static function wt_get_product_id_by_sku($sku) {
         global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
         $post_exists_sku = $wpdb->get_var($wpdb->prepare("
 	    		SELECT $wpdb->posts.ID
 	    		FROM $wpdb->posts
 	    		LEFT JOIN $wpdb->postmeta ON ( $wpdb->posts.ID = $wpdb->postmeta.post_id )
 	    		WHERE $wpdb->posts.post_status IN ( 'publish', 'private', 'draft', 'pending', 'future' )
-	    		AND $wpdb->postmeta.meta_key = '_sku' AND $wpdb->postmeta.meta_value = '%s'
+	    		AND $wpdb->postmeta.meta_key = '_sku' AND $wpdb->postmeta.meta_value = %s
 	    		", $sku));
+        // phpcs:enable
         if ($post_exists_sku) {
             return $post_exists_sku;
         }
@@ -804,8 +904,9 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 		$order_table_enabled =false;
 		if ( class_exists( 'Automattic\WooCommerce\Utilities\OrderUtil' ) ) {
 				$order_table_name = $wpdb->prefix . 'wc_orders';
+				// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
 				$table_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$wpdb->prefix}wc_orders'" );
-
+				// phpcs:enable
 			if ( $table_exists === $order_table_name ) {
 				require_once WP_PLUGIN_DIR . '/woocommerce/woocommerce.php';
 				$order_table_enabled = OrderUtil::custom_orders_table_usage_is_enabled() ? true : false;
@@ -817,4 +918,4 @@ class Wt_Import_Export_For_Woo_Basic_Order {
 }
 }
 
-new Wt_Import_Export_For_Woo_Basic_Order();
+new Wt_Import_Export_For_Woo_Order_Basic_Order();

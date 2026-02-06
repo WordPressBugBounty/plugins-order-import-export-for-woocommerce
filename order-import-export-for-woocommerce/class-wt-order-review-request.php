@@ -82,15 +82,17 @@ class Order_Import_Export_Review_Request
 
             add_action('init', function() {
             
-                $this->banner_message = sprintf(__("Hey, we at %sWebToffee%s would like to thank you for using our plugin. We would really appreciate if you could take a moment to drop a quick review that will inspire us to keep going."), '<b>', '</b>');
+                // translators: 1: bold tag open, 2: bold tag close
+                $this->banner_message = sprintf(__('Hey, we at %1$sWebToffee%2$s would like to thank you for using our plugin. We would really appreciate if you could take a moment to drop a quick review that will inspire us to keep going.', 'order-import-export-for-woocommerce'), '<b>', '</b>');
 
-                $this->new_review_banner_title = sprintf(__('%1$s  %2$s  Loving %3$s  WebToffee Import Export plugin? %4$s  Share Your Feedback! %5$s', 'product-import-export-for-woo'), '🌟', '<span style="font-weight:300;">', '</span>', '<span style="font-weight:300;">', '</span>');
+                // translators: 1: star emoji, 2: span tag open, 3: span tag close, 4: span tag open, 5: span tag close
+                $this->new_review_banner_title = sprintf(__('%1$s  %2$s  Loving %3$s  WebToffee Import Export plugin? %4$s  Share Your Feedback! %5$s', 'order-import-export-for-woocommerce'), '🌟', '<span style="font-weight:300;">', '</span>', '<span style="font-weight:300;">', '</span>');
 
                 /* button texts */
                 $this->later_btn_text   = __("Remind me later", 'order-import-export-for-woocommerce');
                 $this->never_btn_text   = __("Not interested", 'order-import-export-for-woocommerce');
                 $this->review_btn_text  = __("Review now", 'order-import-export-for-woocommerce');
-                $this->review_btn_new_text = __("You deserve it", 'order-import-export-for-woocommerce  ');
+                $this->review_btn_new_text = __("You deserve it", 'order-import-export-for-woocommerce');
                 $this->later_btn_new_text = __("Nope, maybe later", 'order-import-export-for-woocommerce');
                 $this->already_did_btn_new_text = __("I already did", 'order-import-export-for-woocommerce');
 
@@ -100,6 +102,10 @@ class Order_Import_Export_Review_Request
             add_action('admin_print_footer_scripts', array($this, 'add_banner_scripts')); /* add banner scripts */
             add_action('wp_ajax_' . $this->ajax_action_name, array($this, 'process_user_action')); /* process banner user action */
         }
+
+        // Register WooCommerce Pages Banner
+        add_action('admin_notices', array($this, 'show_wc_pages_banner'));
+        add_action('wp_ajax_wt_iew_dismiss_wc_pages_banner', array($this, 'dismiss_wc_pages_banner_ajax'));
     }
 
     /**
@@ -233,7 +239,9 @@ class Order_Import_Export_Review_Request
         
         // Check WC Reports tab if applicable
         if ($currentScreen->id === 'woocommerce_page_wc-reports') {
-            $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders';
+            // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Nonce not required.
+            $current_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'orders';
+            // phpcs:enable
             $required_tab = in_array($post_type, array('order', 'coupon', 'subscription')) ? 'orders' : 
             ($post_type === 'user' ? 'customers' : '');
             if (!$required_tab || $current_tab !== $required_tab) {
@@ -243,17 +251,19 @@ class Order_Import_Export_Review_Request
 
         // $this->update_banner_state(1); /* update banner active state */
         $current_user = wp_get_current_user();
-        $user_first_name = !empty($current_user->first_name) ? $current_user->first_name : __('there', 'users-customers-import-export-for-wp-woocommerce');
+        $user_first_name = !empty($current_user->first_name) ? $current_user->first_name : __('there', 'order-import-export-for-woocommerce');
 
         if(in_array($currentScreen->id, $plugin_pages)){
             $banner_color = 'rgba(233, 242, 252, 1)';
             $border_radius = '8px'; 
             $border_color = '#A0B2D6';
-            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. If you found the plugin helpful, please leave us a quick %7$s 5-star review. %8$s', 'product-import-export-for-woos'),  '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<b>', '</b>');
+            // translators: 1: user first name, 2: br tag, 3: bold tag open, 4: bold tag close, 5: bold tag open, 6: bold tag close, 7: bold tag open, 8: bold tag close
+            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. If you found the plugin helpful, please leave us a quick %7$s 5-star review. %8$s', 'order-import-export-for-woocommerce'),  '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<b>', '</b>');
         }else{
             $banner_color = '#ffffff';
             $border_color = '#ffffff';
-            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our WooCommerce import export plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. %7$s If you found the plugin helpful, please leave us a quick %8$s 5-star review. %9$s It would mean the world to us. %10$s Warm regards, %11$s Team WebToffee %12$s', 'product-import-export-for-woo'), '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<br><br>', '<b>', '</b>', '<br><br>', '<br><b>', '</b>');
+            // translators: 1: user first name, 2: br tag, 3: bold tag open, 4: bold tag close, 5: bold tag open, 6: bold tag close, 7: br tag, 8: bold tag open, 9: bold tag close, 10: br tag, 11: br tag, 12: bold tag open, 13: bold tag close
+            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our WooCommerce import export plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. %7$s If you found the plugin helpful, please leave us a quick %8$s 5-star review. %9$s It would mean the world to us. %10$s Warm regards, %11$s Team WebToffee %12$s', 'order-import-export-for-woocommerce'), '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<br><br>', '<b>', '</b>', '<br><br>', '<br><b>', '</b>');
         }
 
     ?>
@@ -287,7 +297,7 @@ class Order_Import_Export_Review_Request
     {
         check_ajax_referer($this->plugin_prefix);
         if (isset($_POST['wt_review_action_type'])) {
-            $action_type = sanitize_text_field($_POST['wt_review_action_type']);
+            $action_type = sanitize_text_field(wp_unslash($_POST['wt_review_action_type']));
 
             /* current action is in allowed action list */
             if (in_array($action_type, $this->allowed_action_type_arr)) {
@@ -340,19 +350,19 @@ class Order_Import_Export_Review_Request
 
                 /* prepare data object */
                 var data_obj = {
-                    _wpnonce: '<?php echo $nonce; ?>',
-                    action: '<?php echo $this->ajax_action_name; ?>',
+                    _wpnonce: '<?php echo esc_js($nonce); ?>',
+                    action: '<?php echo esc_js($this->ajax_action_name); ?>',
                     wt_review_action_type: ''
                 };
 
-                $(document).on('click', '.<?php echo $this->banner_css_class; ?> a.button', function(e) {
+                $(document).on('click', '.<?php echo esc_js($this->banner_css_class); ?> a.button', function(e) {
                     e.preventDefault();
                     var elm = $(this);
                     var btn_type = elm.attr('data-type');
                     if (btn_type == 'review') {
                         window.open('<?php echo esc_url($this->review_url); ?>');
                     }
-                    elm.parents('.<?php echo $this->banner_css_class; ?>').hide();
+                    elm.parents('.<?php echo esc_js($this->banner_css_class); ?>').hide();
 
                     data_obj['wt_review_action_type'] = btn_type;
                     $.ajax({
@@ -361,7 +371,7 @@ class Order_Import_Export_Review_Request
                         type: 'POST'
                     });
 
-                }).on('click', '.<?php echo $this->banner_css_class; ?> .notice-dismiss', function(e) {
+                }).on('click', '.<?php echo esc_js($this->banner_css_class); ?> .notice-dismiss', function(e) {
                     e.preventDefault();
                     data_obj['wt_review_action_type'] = 'closed';
                     $.ajax({
@@ -429,7 +439,8 @@ class Order_Import_Export_Review_Request
     private function handle_never_dissmissed() {
         global $wpdb, $wt_iew_review_banner_shown;
 
-        // Get first successful job date
+        // Get first successful job date.
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This is a valid use of direct database query.
         $start_date = $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT created_at FROM {$wpdb->prefix}wt_iew_action_history 
@@ -437,6 +448,7 @@ class Order_Import_Export_Review_Request
                 1
             )
         ); 
+        // phpcs:enable
         
         if (!$start_date) {
             return false;
@@ -447,7 +459,8 @@ class Order_Import_Export_Review_Request
         // If less than 30 days from start
         if ($days_since_start > 5 && $days_since_start <= 30) {
             // Get successful jobs on distinct dates after 5 days
-            $query = $wpdb->prepare(
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This is a valid use of direct database query.
+            $success_jobs = $wpdb->get_row($wpdb->prepare(
                 "SELECT h.item_type, 
                     COUNT(DISTINCT DATE(FROM_UNIXTIME(h.created_at))) as date_count,
                     MAX(h.created_at) as last_success
@@ -459,9 +472,8 @@ class Order_Import_Export_Review_Request
                 ORDER BY date_count DESC, last_success DESC 
                 LIMIT 1",
                 1, $start_date
-            );
-
-            $success_jobs = $wpdb->get_row($query);  
+            )); 
+            // phpcs:enable
 
             if ($success_jobs && $success_jobs->date_count >= 2) { 
                 $this->current_post_type = $success_jobs->item_type; 
@@ -474,12 +486,14 @@ class Order_Import_Export_Review_Request
             // After 30 days, check last job (regardless of success)
 
             // First get the last job regardless of post type
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This is a valid use of direct database query.
             $last_job = $wpdb->get_row(
                 "SELECT item_type, status, created_at 
                 FROM {$wpdb->prefix}wt_iew_action_history 
                 ORDER BY created_at DESC 
                 LIMIT 1"
             );
+            // phpcs:enable
             
             if ($last_job && $last_job->status == 1) {
                 $this->current_post_type = $last_job->item_type;
@@ -521,7 +535,8 @@ class Order_Import_Export_Review_Request
         
         global $wpdb;
         
-        $query = $wpdb->prepare(
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- This is a valid use of direct database query.
+        $results = $wpdb->get_row($wpdb->prepare(
             "SELECT h.item_type, 
                     COUNT(*) as success_count,
                     MAX(h.created_at) as last_success
@@ -532,9 +547,8 @@ class Order_Import_Export_Review_Request
              ORDER BY success_count DESC, last_success DESC
              LIMIT 1",
             1, $last_dismissal
-        );
-        
-        $results = $wpdb->get_row($query);
+        ));
+        // phpcs:enable
         
         // If we have results, get the highest count (with latest success date if tied)
         if ($results) {
@@ -554,8 +568,9 @@ class Order_Import_Export_Review_Request
     
             // Check if we're on the WooCommerce Reports page
             if ($screen->id == 'woocommerce_page_wc-reports') {
-                // Set 'orders' as default tab if no 'tab' is set
-                $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders';
+                // Set 'orders' as default tab if no 'tab' is set.
+                // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Nonce not required.
+                $current_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'orders';
     
                 // Define content and plugin URL based on the current tab
                 $content = '';
@@ -567,7 +582,7 @@ class Order_Import_Export_Review_Request
                     case 'orders':
                         // Check if the 'orders' banner has been hidden
                         $cookie_name = 'hide_cta_orders';
-                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field($_COOKIE[$cookie_name]) == 'true') {
+                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field(wp_unslash($_COOKIE[$cookie_name])) == 'true') {
                             return; // Don't show the banner if the cookie is set
                         }
     
@@ -578,7 +593,7 @@ class Order_Import_Export_Review_Request
                     case 'customers':
                         // Check if the 'customers' banner has been hidden
                         $cookie_name = 'hide_cta_customers';
-                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field($_COOKIE[$cookie_name]) == 'true') {
+                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field(wp_unslash($_COOKIE[$cookie_name])) == 'true') {
                             return; // Don't show the banner if the cookie is set
                         }
     
@@ -589,7 +604,7 @@ class Order_Import_Export_Review_Request
                     case 'stock':
                         // Check if the 'stock' banner has been hidden
                         $cookie_name = 'hide_cta_stock';
-                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field($_COOKIE[$cookie_name]) == 'true') {
+                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field(wp_unslash($_COOKIE[$cookie_name])) == 'true') {
                             return; // Don't show the banner if the cookie is set
                         }
     
@@ -600,7 +615,7 @@ class Order_Import_Export_Review_Request
                     case 'subscriptions':
                         // Check if the 'subscriptions' banner has been hidden
                         $cookie_name = 'hide_cta_subscriptions';
-                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field($_COOKIE[$cookie_name]) == 'true') {
+                        if (isset($_COOKIE[$cookie_name]) && sanitize_text_field(wp_unslash($_COOKIE[$cookie_name])) == 'true') {
                             return; // Don't show the banner if the cookie is set
                         }
     
@@ -642,6 +657,148 @@ class Order_Import_Export_Review_Request
                 <?php
             }
         }
+    }
+
+    /**
+     * Show WooCommerce Pages Banner
+     * Displays promotional banners on WooCommerce pages (orders, products, users)
+     */
+    public function show_wc_pages_banner()
+    {
+        global $wt_iew_review_banner_shown;
+        global $wt_iew_wc_pages_banner_shown;
+        
+        // Check if another plugin is already showing a WC pages banner
+        if (isset($wt_iew_wc_pages_banner_shown) && $wt_iew_wc_pages_banner_shown) {
+            return;
+        }
+        
+        $screen = get_current_screen();
+        $wc_pages_banners = array(
+            'woocommerce_page_wc-orders' => array(
+                'option_name' => 'wt_iew_hide_did_you_know_wc_orders_banner_2026',
+                'cookie_name' => 'hide_cta_wc_orders',
+                'content' => '<span style="color: #212121;">' . esc_html__('There\'s a faster way to manage orders. Import, export, and update orders in bulk using CSV, XML, or Excel with the Order Import Export Plugin.', 'order-import-export-for-woocommerce') . '</span>',
+                'plugin_url' => 'https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin&utm_medium=woocommerce_orders&utm_campaign=Order_import_export',
+                'plugin_check' => 'order-import-export-for-woocommerce/order-import-export-for-woocommerce.php',
+                'banner_color' => '#4750CB',
+                'banner_image' => 'assets/images/idea_bulb_blue.svg',
+                'premium_plugin' => 'wt-import-export-for-woo-order/wt-import-export-for-woo-order.php'
+            ),
+            'edit-product' => array(
+                'option_name' => 'wt_iew_hide_did_you_know_wc_products_banner_2026',
+                'cookie_name' => 'hide_cta_wc_products',
+                'content' => '<span style="color: #212121;">' . esc_html__('You can now easily import and export WooCommerce products with images using CSV, XML, or Excel files.', 'order-import-export-for-woocommerce') . '</span>' ,
+                'plugin_url' => 'https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_cross_promotion&utm_medium=all_products_tab&utm_campaign=Product_import_export',
+                'plugin_check' => 'product-import-export-for-woo/product-import-export-for-woo.php',
+                'banner_color' => '#7B54E0',
+                'banner_image' => 'assets/images/idea_bulb_gloomy_purple.svg',
+                'premium_plugin' => 'wt-import-export-for-woo-product/wt-import-export-for-woo-product.php'
+            ),
+            'users' => array(
+                'option_name' => 'wt_iew_hide_did_you_know_wc_customers_banner_2026',
+                'cookie_name' => 'hide_cta_wc_customers',
+                'content' => '<span style="color: #212121;">' . esc_html__('Easily import and export WordPress users & WooCommerce customers to CSV, XML, or Excel for seamless data management.', 'order-import-export-for-woocommerce') . '</span>',
+                'plugin_url' => 'https://www.webtoffee.com/product/wordpress-users-woocommerce-customers-import-export/?utm_source=free_plugin_cross_promotion&utm_medium=woocommerce_customers&utm_campaign=User_import_export',
+                'plugin_check' => 'users-customers-import-export-for-wp-woocommerce/users-customers-import-export-for-wp-woocommerce.php',
+                'banner_color' => '#9D47CB',
+                'banner_image' => 'assets/images/idea_bulb_morado_purple.svg',
+                'premium_plugin' => 'wt-import-export-for-woo-user/wt-import-export-for-woo-user.php'
+            )
+        );
+
+        if (!isset($wc_pages_banners[$screen->id])) {
+            return;
+        }
+
+        $banner_data = $wc_pages_banners[$screen->id];
+
+        // Check if premium plugin is active - if so, don't show the banner
+        if (isset($banner_data['premium_plugin']) && is_plugin_active($banner_data['premium_plugin'])) {
+            return;
+        }
+
+        // Check if banner is hidden via database option (close button) or review banner is shown
+        if ( true === $wt_iew_review_banner_shown || true === get_option($banner_data['option_name'], false)) {
+            return;
+        }
+
+        // Check if banner is temporarily hidden via cookie (maybe later button)
+        if (isset($_COOKIE[$banner_data['cookie_name']]) && 'true' === sanitize_text_field(wp_unslash($_COOKIE[$banner_data['cookie_name']]))) {
+            return;
+        }
+
+        // Mark that a banner is being shown
+        $wt_iew_wc_pages_banner_shown = true;
+
+        $title = esc_html__('Did You Know?', 'order-import-export-for-woocommerce');
+        $ajax_url = admin_url('admin-ajax.php');
+        $nonce = wp_create_nonce('wt_iew_wc_pages_banner');
+        ?>
+        <div id="wt-iew-cta-banner" class="notice notice-info" style="position: relative; padding: 15px; height: 38px; background-color: #fff; border-left: 4px solid <?php echo esc_attr($banner_data['banner_color']); ?>; display: flex; justify-content: space-between; align-items: center; border-radius: 1px; margin: 10px 0px 10px 0;">
+            <button type="button" class="wt-iew-notice-dismiss" data-option-name="<?php echo esc_attr($banner_data['option_name']); ?>" style="position: absolute; top: 50%; right: 10px; transform: translateY(-50%); border: none; margin: 0; padding: 0; background: none; color: #6E6E6E; cursor: pointer; font-size: 20px; line-height: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;">×</button>
+            <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                <div style="display: flex; align-items: center; ">
+                    <img src="<?php echo esc_url(WT_O_IEW_PLUGIN_URL . $banner_data['banner_image']); ?>" style="width: 25px; margin-right: 10px; color: <?php echo esc_attr($banner_data['banner_color']); ?>;">
+                    <h2 style="color: <?php echo esc_attr($banner_data['banner_color']); ?>; font-weight: 500; font-size:15px;"><?php echo esc_html($title); ?></h2>
+                    <span style="margin: 0 6px; font-size: 13px; color: #212121; line-height: 1.4;"><?php echo wp_kses_post($banner_data['content']); ?></span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; ">
+                    <a href="<?php echo esc_url($banner_data['plugin_url']); ?>" target="_blank" class="button-primary" style="background: <?php echo esc_attr($banner_data['banner_color']); ?>; color: white; border: none; padding: 8px 15px; border-radius: 4px; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 13px; height: 32px; line-height: 1;"><?php esc_html_e('Check out plugin →', 'order-import-export-for-woocommerce'); ?></a>
+                    <button class="wt-iew-maybe-later button-secondary" data-cookie-name="<?php echo esc_attr($banner_data['cookie_name']); ?>" style="background-color: #fff; color: #64594D; border: 1px solid #FFF; border-radius: 4px; font-size: 13px; display: flex; align-items: center; justify-content: center; height: 32px; line-height: 1;"><?php esc_html_e('Maybe later', 'order-import-export-for-woocommerce'); ?></button>
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function($) {
+                // Maybe later button - uses cookie (temporary, 30 days)
+                $('.wt-iew-maybe-later').on('click', function(e) {
+                    e.preventDefault();
+                    var cookieName = $(this).data('cookie-name');
+                    document.cookie = cookieName + "=true; path=/; max-age=" + (30 * 24 * 60 * 60) + ";";
+                    $(this).closest('#wt-iew-cta-banner').remove();
+                });
+
+                // Close button - saves to database (permanent)
+                $('.wt-iew-notice-dismiss').on('click', function(e) {
+                    e.preventDefault();
+                    var optionName = $(this).data('option-name');
+                    var banner = $(this).closest('#wt-iew-cta-banner');
+                    
+                    $.ajax({
+                        url: '<?php echo esc_url($ajax_url); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'wt_iew_dismiss_wc_pages_banner',
+                            option_name: optionName,
+                            nonce: '<?php echo esc_js($nonce); ?>'
+                        },
+                        success: function(response) {
+                            banner.remove();
+                        }
+                    });
+                });
+            })(jQuery);
+        </script>
+        <?php
+    }
+
+    /**
+     * AJAX handler for dismissing WooCommerce Pages Banner (close button)
+     * Saves to database option permanently
+     */
+    public function dismiss_wc_pages_banner_ajax()
+    {
+        check_ajax_referer('wt_iew_wc_pages_banner', 'nonce');
+        
+        if (isset($_POST['option_name'])) {
+            $option_name = sanitize_text_field(wp_unslash($_POST['option_name']));
+            // Save to database - permanently hide the banner
+            update_option($option_name, true);
+        }
+        
+        wp_send_json_success();
     }
     
 }

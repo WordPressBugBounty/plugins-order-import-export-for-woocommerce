@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
+class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
 
     public static $temp_order_metadata;
     public static $line_item_meta;
@@ -51,12 +51,12 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         $csv_columns = include_once( __DIR__ . '/../data/data-order-post-columns.php' );
 		$csv_columns = array_combine(array_keys($csv_columns), array_keys($csv_columns));
 
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verification already done in the wt_process_order_bulk_actions(), process_coupons_bulk_actions() method
         $exclude_hidden_meta_columns = array();
-        $user_columns_name = !empty($_POST['columns_name']) ? wc_clean($_POST['columns_name']) : $csv_columns;
-        $export_columns = !empty($_POST['columns']) ? wc_clean($_POST['columns']) : array();
-
-        
-        $delimiter = !empty($_POST['delimiter']) ? $_POST['delimiter'] : ','; // WPCS: CSRF ok, input var ok. 
+        $user_columns_name = !empty($_POST['columns_name']) ? array_map('sanitize_text_field', wp_unslash($_POST['columns_name'])) : $csv_columns;
+        $export_columns = !empty($_POST['columns']) ? array_map('sanitize_text_field', wp_unslash($_POST['columns'])) : array();    
+        $delimiter = !empty($_POST['delimiter']) ? wp_kses_post(wp_unslash($_POST['delimiter'])) : ','; 
+        // phpcs:enable
         $exclude_already_exported =  false;
         $export_to_separate_columns = false;
         self::$include_hidden_meta = false;
@@ -71,13 +71,14 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
 
         if (function_exists('apache_setenv'))
             @apache_setenv('no-gzip', 1);
+        // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- Its necessary to set zlib.output_compression.
         @ini_set('zlib.output_compression', 0);
         @ob_end_clean();
 
         $order_ids = $order_IDS;
 
 
-        $file_name = apply_filters('wt_iew_product_bulk_export_order_filename', 'order_export_' . date('Y-m-d-h-i-s') . '.csv');
+        $file_name = apply_filters('wt_iew_product_bulk_export_order_filename', 'order_export_' . gmdate('Y-m-d-h-i-s') . '.csv');
         
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename=' . $file_name);
@@ -89,14 +90,18 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         $order_ids = apply_filters('wt_iew_product_bulk_export_order_ids', $order_ids);
         // Variable to hold the CSV data we're exporting
         $row = array();
+        // Store column keys in order to match data rows
+        $header_column_keys = array();
 
         // Export header rows
         foreach ($csv_columns as $column => $value) {
             if (!isset($user_columns_name[$column]))
                 continue;
             $temp_head = esc_attr($user_columns_name[$column]);
-            if (!$export_columns || in_array($column, $export_columns))
+            if ( ! $export_columns || in_array( $column, $export_columns ) ) {
                 $row[] = self::format_data($temp_head);
+                $header_column_keys[] = $column;
+            }
         }
 
         if (self::$include_hidden_meta) {
@@ -118,6 +123,8 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
             $rows1 = $row;
             foreach ($found_order_meta as $key => $val) {
                 $rows1[] = 'meta:' . self::format_data($val);
+                // Use original meta key (not formatted) for matching with data array
+                $header_column_keys[] = 'meta:' . $val;
             }
             $row = $rows1;
         }
@@ -125,6 +132,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         $max_line_items = self::get_max_line_items($order_ids);
         for ($i = 1; $i <= $max_line_items; $i++) {
             $row[] = "line_item_{$i}";
+            $header_column_keys[] = "line_item_{$i}";
         }
 
         if ($export_to_separate_columns) {
@@ -133,15 +141,22 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                 foreach (self::$line_item_meta as $meta_value) {
                     $new_val = str_replace("_", " ", $meta_value);
                     $row["line_item_{$i}_name"] = "Product Item {$i} Name";
+                    $header_column_keys[] = "line_item_{$i}_name";
                     $row["line_item_{$i}_product_id"] = "Product Item {$i} id";
+                    $header_column_keys[] = "line_item_{$i}_product_id";
                     $row["line_item_{$i}_sku"] = "Product Item {$i} SKU";
+                    $header_column_keys[] = "line_item_{$i}_sku";
                     $row["line_item_{$i}_quantity"] = "Product Item {$i} Quantity";
+                    $header_column_keys[] = "line_item_{$i}_quantity";
                     $row["line_item_{$i}_total"] = "Product Item {$i} Total";
+                    $header_column_keys[] = "line_item_{$i}_total";
                     $row["line_item_{$i}_subtotal"] = "Product Item {$i} Subtotal";
+                    $header_column_keys[] = "line_item_{$i}_subtotal";
                     if (in_array($meta_value, array("_product_id", "_qty", "_variation_id", "_line_total", "_line_subtotal", "_tax_class", "_line_tax", "_line_tax_data", "_line_subtotal_tax"))) {
                         continue;
                     } else {
                         $row["line_item_{$i}_$meta_value"] = "Product Item {$i} $new_val";
+                        $header_column_keys[] = "line_item_{$i}_$meta_value";
                     }
                 }
             }
@@ -150,10 +165,12 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         $row = apply_filters('wt_iew_product_bulk_export_order_csv_header', $row, $filter_args); //Alter CSV Header
 
         if (!empty($row)) {
-            $row = array_map('Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export::wrap_column', $row);
+            $row = array_map('Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export::wrap_column', $row);
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
             fwrite($fp, implode($delimiter, $row) . "\n");
         }
         $filter_args['header_row'] = $row;
+        $filter_args['header_column_keys'] = $header_column_keys;
         unset($row);
         // Loop orders
         foreach ($order_ids as $order_id) {
@@ -163,7 +180,14 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
 
             $data = apply_filters('wt_iew_product_bulk_export_order_csv_data', $data, $filter_args); //Alter CSV Data
             if (!empty($data)) {
-                $row = array_map('Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export::wrap_column', $data);
+                // Build row in the same order as header columns
+                $row = array();
+                foreach ( $header_column_keys as $column_key ) {
+                    // Get the value from data array using the column key
+                    $row[] = isset( $data[$column_key] ) ? $data[$column_key] : '';
+                }
+                $row = array_map('Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export::wrap_column', $row);
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
                 fwrite($fp, implode($delimiter, $row) . "\n");
             }
             unset($row);
@@ -172,7 +196,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
             update_post_meta($order_id, 'wf_order_exported_status', TRUE);
         }
 
-
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
         fclose($fp);
         exit;
     }
@@ -197,7 +221,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
 			}
 			for ($i = 0; $i < strlen($data); $i++) {
 				$charval = ord($data[$i]);
-				$newcharstring .= Wt_Import_Export_For_Woo_Basic_Common_Helper::wt_iconv_fallback_int_utf8($charval);
+				$newcharstring .= Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::wt_iconv_fallback_int_utf8($charval);
 			}
 			return $newcharstring;
 		} 
@@ -261,7 +285,8 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                 $line_item['tax_data'] = $line_tax_ser;
             }
 
-            foreach ($item_meta as $key => $value) {
+            if ( ! empty( $item_meta ) && is_array( $item_meta ) ) {
+                foreach ($item_meta as $key => $value) {
                 switch ($key) {
                     case '_qty':
                     case '_variation_id':
@@ -282,6 +307,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                         $line_item[$key] = $value;
                         break;
                 }
+            }
             }
 
             $refunded = wc_format_decimal($order->get_total_refunded_for_item($item_id), 2);
@@ -309,7 +335,9 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         $line_items_shipping = $order->get_items('shipping'); 
         foreach ($line_items_shipping as $item_id => $item) {
             $item_meta = self::get_order_line_item_meta($item_id);
-            foreach ($item_meta as $key => $value) {
+            $meta = array();
+            if ( ! empty( $item_meta ) && is_array( $item_meta ) ) {
+                foreach ($item_meta as $key => $value) {
                 switch ($key) {
                     case 'Items':
                     case 'method_id':
@@ -326,9 +354,10 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                         if (is_array($value))
                             $value = implode(',', $value);
 
-                        $meta[$key] = json_encode(Wt_Import_Export_For_Woo_Basic_Common_Helper::wt_unserialize_safe($value));
+                        $meta[$key] = json_encode(Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::wt_unserialize_safe($value));
                         break;
                 }
+            }
             }
             foreach (array('Items', 'method_id', 'taxes') as $value) {
                 if (!isset($meta[$value])) {
@@ -397,13 +426,13 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_refund_amount(),
                     'reason:' . $refunded_items->reason,
-                    'date:' . date('Y-m-d H:i:s', strtotime($refunded_items->date_created)),
+                    'date:' . wp_date('Y-m-d H:i:s', strtotime($refunded_items->date_created)),
                 ));
             } else {
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_amount(),
                     'reason:' . $refunded_items->get_reason(),
-                    'date:' . date('Y-m-d H:i:s', strtotime($refunded_items->get_date_created())),
+                    'date:' . wp_date('Y-m-d H:i:s', strtotime($refunded_items->get_date_created())),
                 ));
             }
         }
@@ -412,7 +441,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
             $order_data = array(
                 'order_id' => $order->get_id(),
                 'order_number' => $order->get_order_number(),
-                'order_date' => date('Y-m-d H:i:s', strtotime(get_post($order->get_id())->post_date)),
+                'order_date' => wp_date('Y-m-d H:i:s', strtotime(get_post($order->get_id())->post_date)),
                 'paid_date' => $order->get_date_paid(),
                 'status' => $order->get_status(),
                 'shipping_total' => $order->get_total_shipping(),
@@ -473,6 +502,17 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
                 // need to modify code
             } else {
                 unset($order_data[$key]);
+            }
+        }
+
+        // Populate meta columns from csv_columns
+        foreach ( $csv_columns as $column_key => $column_value ) {
+            if ( 0 === strpos( $column_key, 'meta:' ) && ( ! isset( $order_data[$column_key] ) || empty( $order_data[$column_key] ) ) ) {
+                $meta_key = substr($column_key, 5); // Remove 'meta:' prefix
+                if ( ( ! $export_columns || in_array( $column_key, $export_columns ) ) ) {
+                    $meta_value = $order->get_meta($meta_key);
+                    $order_data[$column_key] = null !== $meta_value ? $meta_value : '';
+                }
             }
         }
 
@@ -543,7 +583,8 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
         for ($i = 1; $i <= $max_line_items; $i++) {
             $order_data["line_item_{$i}"] = !empty($order_data["line_item_{$i}"]) ? self::format_data($order_data["line_item_{$i}"]) : '';
         }
-        $export_to_separate_columns = !empty($_POST['export_to_separate_columns']) ? true : false;
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verification already done in the wt_process_order_bulk_actions(), process_coupons_bulk_actions() method
+        $export_to_separate_columns = ! empty( $_POST['export_to_separate_columns'] );
         if ($export_to_separate_columns) {
             $line_item_values = self::get_all_metakeys_and_values($order);
             for ($i = 1; $i <= $max_line_items; $i++) {
@@ -611,6 +652,7 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
 
     public static function get_all_metakeys($post_type = 'shop_order') {
         global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
         $meta = $wpdb->get_col($wpdb->prepare(
                         "SELECT DISTINCT pm.meta_key
             FROM {$wpdb->postmeta} AS pm
@@ -618,36 +660,42 @@ class Wt_Import_Export_For_Woo_Basic_Order_Bulk_Export {
             WHERE p.post_type = %s
             AND p.post_status IN ( 'wc-pending', 'wc-processing', 'wc-on-hold', 'wc-completed', 'wc-cancelled', 'wc-refunded', 'wc-failed' ) ORDER BY pm.meta_key", $post_type
         ));
-        //sort($meta);
+        // phpcs:enable
         return $meta;
     }
 
     public static function get_all_line_item_metakeys() {
         global $wpdb;
         $filter_meta = apply_filters('wt_order_export_select_line_item_meta', array());
-        $filter_meta = !empty($filter_meta) ? implode("','", $filter_meta) : '';
+        $placeholder_values = array();
         $query = "SELECT DISTINCT om.meta_key
             FROM {$wpdb->prefix}woocommerce_order_itemmeta AS om 
             INNER JOIN {$wpdb->prefix}woocommerce_order_items AS oi ON om.order_item_id = oi.order_item_id
             WHERE oi.order_item_type = 'line_item'";
         if (!empty($filter_meta)) {
-            $query .= " AND om.meta_key IN ('" . $filter_meta . "')";
+            $query .= " AND om.meta_key IN (" . implode( ', ', array_fill( 0, count( $filter_meta ), '%s' ) ) . ")";
+            $placeholder_values = array_merge( $placeholder_values, $filter_meta );
         }
-        $meta_keys = $wpdb->get_col($query);
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Its necessary to use direct database query.
+        $meta_keys = $wpdb->get_col($wpdb->prepare($query, $placeholder_values));
+        // phpcs:enable
         return $meta_keys;
     }
 
     public static function get_order_line_item_meta($item_id) {
         global $wpdb;
         $filtered_meta = apply_filters('wt_order_export_select_line_item_meta', array());
-        $filtered_meta = !empty($filtered_meta) ? implode("','", $filtered_meta) : '';
+        $placeholder_values = array( $item_id );
         $query = "SELECT meta_key,meta_value
-            FROM {$wpdb->prefix}woocommerce_order_itemmeta WHERE order_item_id = '$item_id'";
+            FROM {$wpdb->prefix}woocommerce_order_itemmeta WHERE order_item_id = %d";
         if (!empty($filtered_meta)) {
-            $query .= " AND meta_key IN ('" . $filtered_meta . "')";
+            $query .= " AND meta_key IN (" . implode( ', ', array_fill( 0, count( $filtered_meta ), '%s' ) ) . ")";
+            $placeholder_values = array_merge( $placeholder_values, $filtered_meta );
         }
-        $meta_keys = $wpdb->get_results($query, OBJECT_K);
-        return $meta_keys;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Its necessary to use direct database query.
+        $meta_values = $wpdb->get_results($wpdb->prepare($query, $placeholder_values), OBJECT_K);
+        // phpcs:enable
+        return $meta_values ? $meta_values : array();
     }
 
 
