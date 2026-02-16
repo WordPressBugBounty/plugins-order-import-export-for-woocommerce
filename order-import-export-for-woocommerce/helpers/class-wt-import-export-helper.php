@@ -34,23 +34,22 @@ if(!class_exists('Wt_Iew_IE_Basic_Helper'))
 				return $file_path;
 			}else
 			{
-                            /* Retrying if the directory structure is different from wordpress default file structure */
-                            $url_parms = explode('/', $file_url);
+                /* Retrying if the directory structure is different from wordpress default file structure */
+                $url_parms = explode('/', $file_url);
 
-                            $file_name =  end($url_parms);
+                $file_name =  end($url_parms);
 
-                            $file_dir_name = prev($url_parms);
+                $file_dir_name = prev($url_parms);
 
-                            $file_path = WP_CONTENT_DIR.'/'.$file_dir_name.'/'.$file_name;
-                            
-                            if(file_exists($file_path))
-                            {
-                                    return $file_path;
-                            }else
-                            {
-                            
-				return false;
-                            }
+                $file_path = WP_CONTENT_DIR.'/'.$file_dir_name.'/'.$file_name;
+                
+                if(file_exists($file_path))
+                {
+                        return $file_path;
+                }else
+                {               
+					return false;
+                }
 			}
 		}
 		public static function get_validation_rules($step, $form_data, $module_obj)

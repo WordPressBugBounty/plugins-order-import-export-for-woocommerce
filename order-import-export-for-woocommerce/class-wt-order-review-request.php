@@ -667,7 +667,7 @@ class Order_Import_Export_Review_Request
     {
         global $wt_iew_review_banner_shown;
         global $wt_iew_wc_pages_banner_shown;
-        
+
         // Check if another plugin is already showing a WC pages banner
         if (isset($wt_iew_wc_pages_banner_shown) && $wt_iew_wc_pages_banner_shown) {
             return;
@@ -719,7 +719,7 @@ class Order_Import_Export_Review_Request
         }
 
         // Check if banner is hidden via database option (close button) or review banner is shown
-        if ( true === $wt_iew_review_banner_shown || true === get_option($banner_data['option_name'], false)) {
+        if ( true === $wt_iew_review_banner_shown || true === (bool) get_option($banner_data['option_name'], false)) {
             return;
         }
 

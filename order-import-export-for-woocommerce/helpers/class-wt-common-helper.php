@@ -186,7 +186,12 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
                     for ($i = 0; $i < $num_elements; $i++) {
                         $key = $unserialize_value($offset);
                         $value = $unserialize_value($offset);
-                        $result[$key] = $value;
+                        
+                        // Only add items with valid array key types (string or integer).
+                        // Skip malformed items where key is array, null, bool, etc.
+                        if ( is_string( $key ) || is_int( $key ) ) {
+                            $result[$key] = $value;
+                        }
                     }
     
                     $offset++; // Move past closing '}'.
@@ -201,7 +206,12 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
                     for ($i = 0; $i < $num_properties; $i++) {
                         $key = $unserialize_value($offset);
                         $value = $unserialize_value($offset);
-                        $result[$key] = $value;
+                        
+                        // Only add items with valid array key types (string or integer).
+                        // Skip malformed items where key is array, null, bool, etc.
+                        if ( is_string( $key ) || is_int( $key ) ) {
+                            $result[$key] = $value;
+                        }
                     }
     
                     $offset++; // Move past closing '}'.
