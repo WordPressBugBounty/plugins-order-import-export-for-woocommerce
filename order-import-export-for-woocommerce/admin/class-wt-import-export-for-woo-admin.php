@@ -160,7 +160,7 @@ if (!class_exists('Wt_Import_Export_For_Woo_Order_Admin_Basic')) {
 						'template_del_loader' => __('Deleting template...', 'order-import-export-for-woocommerce'),
 						'value_empty' => __('Value is empty.', 'order-import-export-for-woocommerce'),
 						// translators: 1: troubleshooting guide link tag open, 2: troubleshooting guide link tag close
-						'error' => sprintf(__('An unknown error has occurred! Refer to our %1$stroubleshooting guide%2$s for assistance.', 'order-import-export-for-woocommerce'), '<a href="' . WT_IEW_DEBUG_BASIC_TROUBLESHOOT . '" target="_blank">', '</a>'),
+						'error' => sprintf(__('An unknown error has occurred! Refer to our %1$stroubleshooting guide%2$s for assistance.', 'order-import-export-for-woocommerce'), '<a href="' . esc_url( WT_IEW_DEBUG_BASIC_TROUBLESHOOT ) . '" target="_blank">', '</a>'),
 						'success' => __('Success.', 'order-import-export-for-woocommerce'),
 						'loading' => __('Loading...', 'order-import-export-for-woocommerce'),
 						'sure' => __('Are you sure?', 'order-import-export-for-woocommerce'),

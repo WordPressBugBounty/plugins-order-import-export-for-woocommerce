@@ -134,7 +134,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			'label' => __("Generate Import log", 'order-import-export-for-woocommerce'),
 			'type' => 'checkbox',
 			'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
-			'value' => 1,
+			'value' => 0,
 			'field_name' => 'enable_import_log',
 			'field_group' => 'advanced_field',
 			// translators: 1: a tag open, 2: a tag close
@@ -309,19 +309,24 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			{
 				$this->temp_import_file=$response['file_name'];
 
-				/* delete temp files other than the current temp file of same rerun id, if exists */
-				$file_path=$this->get_file_path();
-   				$temp_files = glob($file_path.'/rerun_'.$this->rerun_id.'_*');
-   				if(count($temp_files)>1) /* Other than the current temp file */
-   				{
-   					foreach($temp_files as $key => $temp_file)
-   					{
-   						if(basename($temp_file)!=$this->temp_import_file)
-   						{
-   							@unlink($temp_file); //delete it
-   						}
-   					}
-   				} 
+				// Delete temp files other than the current temp file of same rerun id, if exists.
+				$file_path    = $this->get_file_path();
+				$temp_files   = array();
+				$temp_files_1 = glob( $file_path . '/rerun_' . $this->rerun_id . '_*' );
+				$temp_files   = is_array( $temp_files_1 ) ? $temp_files_1 : array();
+				$temp_files_2 = glob( $file_path . '/rerun-' . $this->rerun_id . '-*' );
+   				
+				if ( is_array( $temp_files_2 ) ) {
+					$temp_files = array_merge( $temp_files, $temp_files_2 );	
+				}
+
+				if(count($temp_files)>1){ /* Other than the current temp file */				
+					foreach($temp_files as $key => $temp_file) {
+						if(basename($temp_file)!== $this->temp_import_file ) {
+							wp_delete_file($temp_file); //delete it
+						}
+					}
+				} 
    				
 			}else /* unable to create temp file, then abort the rerun request */
 			{
@@ -670,11 +675,16 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		return 'log_'.$history_id.'.log';
 	}
 
-	public function get_temp_file_name($ext)
-	{
+	/**
+	 * 	Generate temp file name.
+	 * 	
+	 * 	@param string $ext Extension for the the file name.
+	 * 	@return string Generated file name.
+	 */
+	public function get_temp_file_name( $ext ) {
 		/* adding rerun prefix is to easily identify rerun temp files */
-		$rerun_prefix=($this->rerun_id>0 ? 'rerun_'.$this->rerun_id.'_' : '');
-		return $rerun_prefix.'temp_'.$this->to_import.'_'.time().'.'.$ext;
+		$rerun_prefix = ( $this->rerun_id > 0 ? 'rerun-' . $this->rerun_id . '-' : '' );
+		return sanitize_file_name( $rerun_prefix . 'temp-' . $this->to_import . '-' . time() . '.' . $ext );
 	}
 
 	/**
@@ -1165,9 +1175,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			return;
 		}
 
+		$out = array(
+			'status' => 0,
+			'msg' => __('Error', 'order-import-export-for-woocommerce'),
+		);
+
 		include_once plugin_dir_path(__FILE__).'classes/class-import-ajax.php';
-		if(Wt_Iew_Sh::check_write_access(WT_IEW_PLUGIN_ID_BASIC))
-		{
+		if ( Wt_Iew_Sh::check_write_access(WT_IEW_PLUGIN_ID_BASIC ) ) {
 			/**
 			*	Check it is a rerun call
 			*/
@@ -1197,21 +1211,19 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			
 			$allowed_ajax_actions=array('get_steps', 'validate_file', 'get_meta_mapping_fields', 'save_template', 'save_template_as', 'update_template', 'download', 'import', 'upload_import_file', 'delete_import_file');
 
-			$out=array(
-				'status'=>0,
-				'msg'=>esc_html__('Error', 'order-import-export-for-woocommerce'),
-			);
-
 			if(method_exists($ajax_obj, $import_action) && in_array($import_action, $allowed_ajax_actions))
 			{
 				$out=$ajax_obj->{$import_action}($out);
 			}
 
-			if($data_type=='json')
-			{
-				echo wp_json_encode($out);
+			if ( 'json' === $data_type ) {
+				echo wp_json_encode( $out );
 			}
 			// phpcs:enable
+		} else {
+			// translators: %1$s is the opening link tag, %2$s is the closing link tag.
+			$out['msg'] =  sprintf( __( 'Access denied. This may be due to an expired nonce. Please reload the page and try again. If the issue persists, please refer to our %1$stroubleshooting guide%2$s.', 'order-import-export-for-woocommerce' ), '<a href="' . esc_url( WT_IEW_DEBUG_BASIC_TROUBLESHOOT ) . '" target="_blank">', '</a>' );
+			echo wp_json_encode( $out );
 		}
 		exit();
 	}

@@ -2434,8 +2434,21 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
             $order = apply_filters('wt_woocommerce_import_pre_insert_order_object', $order, $data);  
             
             $order->save();
-			
-			if ($this->update_stock_details) {
+            
+
+            /**
+             * Allow overriding whether to update stock and sales when updating an existing order.
+             * Only applies when merging/updating; fresh imports use only the "Update stock details" option.
+             *
+             * @since 2.7.2
+             * @param bool      $update_for_existing_order Whether to update stock for existing order. Default false.
+             * @param WC_Order  $order                     The order object.
+             * @param array     $data                      The imported order data.
+             */
+            $update_for_existing_order = apply_filters('wt_woocommerce_order_import_update_for_existing_order', false, $order, $data);
+
+			$should_update_stock = $this->update_stock_details && ( ! $this->merge || $update_for_existing_order );
+			if ( $should_update_stock ) {
 				$donot_reduce_statuses = apply_filters( 'wt_iew_order_import_donot_reduce_statuses', array( 'refunded', 'cancelled', 'failed' ) );
 				if (!in_array($order->get_status(), $donot_reduce_statuses)) {
 					wc_reduce_stock_levels($order->get_id());

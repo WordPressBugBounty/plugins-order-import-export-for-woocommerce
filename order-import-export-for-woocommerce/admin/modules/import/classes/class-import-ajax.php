@@ -107,14 +107,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 		$file_url=(isset($_POST['file_url']) ? esc_url_raw(wp_unslash($_POST['file_url'])) : '');
 		$mapping_profile=(isset($_POST['mapping_profile']) ? sanitize_text_field(wp_unslash($_POST['mapping_profile'])) : '');
 		// phpcs:enable
-		$out['file_url']=$file_url;
-		if($file_url!="" )
-		{
-                    if(!$mapping_profile){
-                      $this->import_obj->delete_import_file($file_url);
-                    }
-			$out['status']=1;
-			$out['msg']='';
+		$out['file_url'] = $file_url;
+		if ( '' !== $file_url ) {
+			if ( ! $mapping_profile ) {
+				$this->import_obj->delete_import_file( $file_url );
+			}
+			$out['status'] = 1;
+			$out['msg'] = '';
 		}
 		return $out;
 	}
@@ -128,23 +127,25 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verification done in the ajax_main() method.
 		if(isset($_FILES['wt_iew_import_file']))
 		{
-			$is_file_type_allowed=false;
-			$ext=isset($_FILES['wt_iew_import_file']['name']) ? pathinfo(sanitize_file_name(wp_unslash($_FILES['wt_iew_import_file']['name'])), PATHINFO_EXTENSION) : '';
-			if(isset($this->import_obj->allowed_import_file_type_mime[$ext])) /* extension exists. */
-			{
-				$is_file_type_allowed=true;
+			$is_file_type_allowed = false;
+			$uploaded_file_name = isset($_FILES['wt_iew_import_file']['name']) ? sanitize_file_name(wp_unslash($_FILES['wt_iew_import_file']['name'])) : '';
+			$ext = isset($uploaded_file_name) ? pathinfo($uploaded_file_name, PATHINFO_EXTENSION) : '';
+			
+			if(isset($this->import_obj->allowed_import_file_type_mime[$ext])){ /* extension exists. */
+				$is_file_type_allowed = true;
 			}
 
-			if($is_file_type_allowed) /* Allowed file type */
-			{
+			if ( $is_file_type_allowed ) { /* Allowed file type */
+				
 				// phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged -- set_time_limit is used to set the time limit for the script.
 				@set_time_limit(3600); // 1 hour 
 
-				$max_bytes=($this->import_obj->max_import_file_size*1000000); //convert to bytes
-				if(isset($_FILES['wt_iew_import_file']['size']) && $max_bytes>=$_FILES['wt_iew_import_file']['size'])
-				{
-					$file_name='local_file_'.time().'_'.sanitize_file_name(wp_unslash($_FILES['wt_iew_import_file']['name'])); //sanitize the file name, add a timestamp prefix to avoid conflict
-					$file_path=$this->import_obj->get_file_path($file_name);
+				$max_bytes = ( $this->import_obj->max_import_file_size * 1000000 ); //convert to bytes
+				$size = isset( $_FILES['wt_iew_import_file']['size'] ) ? sanitize_text_field( wp_unslash( $_FILES['wt_iew_import_file']['size'] ) ) : 0;
+				if( $max_bytes >= $size) {
+					
+					$file_name = 'local-file-' . time() . '-' . str_replace( '_', '-', $uploaded_file_name );
+					$file_path = $this->import_obj->get_file_path( $file_name );
 
           // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Generic.PHP.ForbiddenFunctions.Found
 					if(isset($_FILES['wt_iew_import_file']['tmp_name']) && @move_uploaded_file(sanitize_text_field(wp_unslash($_FILES['wt_iew_import_file']['tmp_name'])), $file_path))
@@ -159,9 +160,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 						$file_url=(isset($_POST['file_url']) ? esc_url_raw(wp_unslash($_POST['file_url'])) : '');
 						$map_profile_id=(isset($_POST['map_profile_id']) ? sanitize_text_field(wp_unslash($_POST['map_profile_id'])) : '');
 						
-						if($file_url!="" && !$map_profile_id)
-						{
-							$this->import_obj->delete_import_file($file_url);
+						if ( '' !== $file_url && ! $map_profile_id ) {
+							$this->import_obj->delete_import_file( $file_url );
 						}
 					}else
 					{

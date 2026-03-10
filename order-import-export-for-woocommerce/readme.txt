@@ -4,7 +4,7 @@ Tags: woocommerce export orders, woocommerce import orders, advanced order expor
 Requires at least: 3.0
 Tested up to: 6.9
 Requires PHP: 5.6
-Stable tag: 2.7.1
+Stable tag: 2.7.2
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -30,7 +30,7 @@ The following are functionalities offered by the basic version of the WooCommerc
  &#128312; **Bulk Updates:** Bulk update WooCommerce orders and coupons.
  &#128312; **YITH Compatibility:** Compatible with YITH WooCommerce Order Tracking plugin.
  &#128312; **Export Filters:** Supports various export orders filters (order status, product, coupon, customer, date range) for order export to CSV.
- &#9989; Tested OK with WooCommerce 10.5.1
+ &#9989; Tested OK with WooCommerce 10.5.3
  &#9989; Tested OK with WordPress 6.9.1
  &#9989; Tested OK with PHP 8.3
 
@@ -114,6 +114,10 @@ Importing WooCommerce orders using a CSV file is simple and efficient with the p
 Please refer to the <a rel="nofollow" href="https://www.webtoffee.com/setting-up-order-import-export-plugin-for-woocommerce/">order export import plugin</a> documentation for more detailed help.
 
 Highlights: Simply Export Orders, Customer Order CSV Export, Export Orders to Excel, Export Coupons, Import Coupons, Export Subscriptions, Import Subscriptions. Best WooCommerce Order Export Plugin in Market.
+
+== Connection to feedback.webtoffee.com ==
+This plugin connects to [feedback.webtoffee.com](https://feedback.webtoffee.com) for collecting feedback when the plugin is deactivated. 
+See our [Privacy Policy](https://www.webtoffee.com/privacy-policy/) and [Terms & Conditions](https://www.webtoffee.com/terms-conditions/) for details on data collection and usage.
 
 
 ###RELATED PLUGINS FROM WEBTOFFEE###
@@ -218,18 +222,16 @@ Yes.
 
 == Changelog ==
 
-= 2.7.1 2026-2-16 =
-* [Compatibility] - Tested OK with WordPress 6.9.1
-* [Compatibility] – Tested OK with WooCommerce 10.5.1
-* [Improvement] - Enhancements to the import mapping screen.
-* [Fix] - Resolved an issue where the banner reappeared after dismissal on page reload.
+= 2.7.2 2026-03-10 =
+* [Compatibility] – Tested OK with WooCommerce 10.5.3
+* [Improvement] - Replaced underscores in import/export file names with hyphens.
+* [Improvement] – UI tweaks.
 
 [See changelog for all versions](https://plugins.svn.wordpress.org/order-import-export-for-woocommerce/trunk/changelog.txt)
 
 == Upgrade Notice ==
 
-= 2.7.1 =
-* [Compatibility] - Tested OK with WordPress 6.9.1
-* [Compatibility] – Tested OK with WooCommerce 10.5.1
-* [Improvement] - Enhancements to the import mapping screen.
-
+= 2.7.2 =
+* [Compatibility] – Tested OK with WooCommerce 10.5.3
+* [Improvement] - Replaced underscores in import/export file names with hyphens.
+* [Improvement] – UI tweaks.

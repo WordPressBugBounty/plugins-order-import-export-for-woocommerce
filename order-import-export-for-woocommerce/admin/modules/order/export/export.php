@@ -1164,8 +1164,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
 		$query_line_items = "select COUNT(p.order_id) AS ttal from {$wpdb->prefix}woocommerce_order_items as p where order_item_type ='line_item' GROUP BY p.order_id ORDER BY ttal DESC LIMIT 1";
 		$line_item_keys = $wpdb->get_col($query_line_items);
         // phpcs:enable
-		$max_line_items = $line_item_keys[0];
-		return $max_line_items;
+		return isset( $line_item_keys[0] ) ? absint( $line_item_keys[0] ) : 0;
     }
 }
 }

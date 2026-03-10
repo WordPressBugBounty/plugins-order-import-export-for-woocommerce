@@ -174,37 +174,37 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			'validation_rule'=>array('type'=>'absint'),
 			'attr' => array('min' => 1, 'max' => 200),
 		);
-                if(is_plugin_active('product-import-export-for-woo/product-import-export-for-woo.php')){
-                    $fields['enable_chatgpt'] = array(
-			'label'=>__( "Enable ChatGPT", 'order-import-export-for-woocommerce' ),
-			'value'=>0,
-			'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
-			'type'=>'checkbox',
-			'field_name'=>'enable_chatgpt',
-			'field_group'=>'advanced_field',
-			'help_text'=>__( 'Automatically generate product descriptions from product titles using ChatGPT API for products without descriptions in the importing CSV.', 'order-import-export-for-woocommerce' ),
-                    	'form_toggler'=>array(
-				'type'=>'parent',
-				'target'=>'wt_iew_enable_chatgpt',
-			),
-                    );  
-                    $fields['chatgpt_api_key'] = array(
-                            'label' => __("Chat GPT API key", 'order-import-export-for-woocommerce'),
-                            'type' => 'text',
-                            'value' => '',
-                            'field_name' => 'chatgpt_api_key',
-                            'field_group' => 'advanced_field',
-							// translators: 1: a tag open, 2: a tag close
-                            'help_text' => sprintf(__('Input the ChatGPT API key to enable the automatic generation of product descriptions. %1$s Where do I get my API Keys? %2$s ', 'order-import-export-for-woocommerce'), '<a href="https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key" target="_blank">', '</a>'),
-                            'validation_rule' => array('type' => 'text'),
-                            'form_toggler'=>array(
-								'type'=>'child',
-								'id'=>'wt_iew_enable_chatgpt',
-								'val'=>1,
-								'chk'=>'true'
-                            ),
-                    );
-                }
+		if(is_plugin_active('product-import-export-for-woo/product-import-export-for-woo.php')){
+            $fields['enable_chatgpt'] = array(
+				'label'=>__( "Enable ChatGPT", 'order-import-export-for-woocommerce' ),
+				'value'=>0,
+				'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
+				'type'=>'checkbox',
+				'field_name'=>'enable_chatgpt',
+				'field_group'=>'advanced_field',
+				'help_text'=>__( 'Automatically generate product descriptions from product titles using ChatGPT API for products without descriptions in the importing CSV.', 'order-import-export-for-woocommerce' ),
+					'form_toggler'=>array(
+						'type'=>'parent',
+						'target'=>'wt_iew_enable_chatgpt',
+					),
+			);  
+			$fields['chatgpt_api_key'] = array(
+				'label' => __("Chat GPT API key", 'order-import-export-for-woocommerce'),
+				'type' => 'text',
+				'value' => '',
+				'field_name' => 'chatgpt_api_key',
+				'field_group' => 'advanced_field',
+				// translators: 1: a tag open, 2: a tag close
+				'help_text' => sprintf(__('Input the ChatGPT API key to enable the automatic generation of product descriptions. %1$s Where do I get my API Keys? %2$s ', 'order-import-export-for-woocommerce'), '<a href="https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key" target="_blank">', '</a>'),
+				'validation_rule' => array('type' => 'text'),
+				'form_toggler'=>array(
+					'type'=>'child',
+					'id'=>'wt_iew_enable_chatgpt',
+					'val'=>1,
+					'chk'=>'true'
+				),
+			);
+		}
 		return $fields;
 	}
 
@@ -704,7 +704,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 		$file_as=(isset($this->allowed_export_file_type[$file_as]) ? $file_as : 'csv');
 
 		
-		$generated_file_name=$this->to_export.'_export_'.gmdate('Y-m-d-h-i-s').'.'.$file_as;
+		$generated_file_name = sanitize_file_name( $this->to_export . '-export-' . gmdate('Y-m-d-H-i-s') . '.' . $file_as );
 
 		if($export_id==0) //first batch then create a history entry
 		{

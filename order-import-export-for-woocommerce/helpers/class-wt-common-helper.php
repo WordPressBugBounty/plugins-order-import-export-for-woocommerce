@@ -131,17 +131,22 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
     }
 
     /**
-     * Safe custom unserialize function that handles only basic types
-     * 
+     * Safe custom unserialize function that handles only basic types.
+     * If the value is not serialized (e.g. scalar or plain string), returns it unchanged.
+     *
      * @since 2.6.1 Added to ensure data migration from serialized to JSON format
-     * @param string $data Serialized data
-     * @return mixed Unserialized data (only int, string, bool, array)
+     * @param mixed $data Serialized string, or any other value to return as-is
+     * @return mixed Unserialized data (only int, string, bool, array), or original value if not serialized. Empty input returns false.
      */
     public static function wt_unserialize_safe($data) {
 
         if( empty($data) ) {
             return false;
         } 
+        if ( ! is_serialized( $data ) ) {
+            return $data;
+        }
+
         $offset = 0;
     
         // Recursive function to handle different types.

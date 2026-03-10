@@ -80,7 +80,7 @@ $wf_admin_view_path = plugin_dir_path(WT_O_IEW_PLUGIN_FILENAME) . 'admin/views/'
 		<span class="wt_iew_popup_hd_label"><?php esc_html_e('Import progress', 'order-import-export-for-woocommerce'); ?></span>
 		<div class="wt_iew_popup_close">X</div>
 	</div>
-	<div class="wt_iew_import_progress_content" style="max-height:620px;overflow: auto;">
+	<div class="wt_iew_import_progress_content" style="max-height:620px;">
 		<table id="wt_iew_import_progress" class="widefat_importer widefat wt_iew_import_progress wp-list-table fixed striped history_list_tb log_list_tb">
 			<thead>
 				<tr>
@@ -104,7 +104,7 @@ $wf_admin_view_path = plugin_dir_path(WT_O_IEW_PLUGIN_FILENAME) . 'admin/views/'
 		</p>
 	</div>
 
-	<div class="wt-iew-import-completed" style="display:none;border-top: 1px outset;">
+	<div class="wt-iew-import-completed" style="display:none;">
 		<h3><?php esc_html_e('Import Completed', 'order-import-export-for-woocommerce'); ?><span style="color:green" class="dashicons dashicons-yes-alt"></span></h3>
 		<div class="wt-iew-import-results">
 			<div class="wt-iew-import-result-row">
@@ -123,7 +123,9 @@ $wf_admin_view_path = plugin_dir_path(WT_O_IEW_PLUGIN_FILENAME) . 'admin/views/'
 		<div style="float:right;">
 			<div style="float:right;">
 				<a target="_blank" href="#" class="button button-primary wt_iew_view_imported_items" data-log-file="" style="display:none" type="button" style="margin-right:10px;"><?php esc_html_e('View Item', 'order-import-export-for-woocommerce'); ?></a>
-				<button class="button button-primary wt_iew_view_log_btn" data-log-file="" style="display:none" type="button" style="margin-right:10px;"><?php esc_html_e('View Log', 'order-import-export-for-woocommerce'); ?></button>
+				<?php if ( 1 === (int) Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings( 'enable_import_log' ) ) : ?>
+					<button class="button button-primary wt_iew_view_log_btn" data-log-file="" type="button" style="display:none;margin-right:10px;"><?php esc_html_e( 'View Log', 'order-import-export-for-woocommerce' ); ?></button>
+				<?php endif; ?>
 				<button class="button button-primary wt_iew_popup_cancel_btn" type="button" style="margin-right:10px;"><?php esc_html_e('Cancel', 'order-import-export-for-woocommerce'); ?></button>
 				<button class="button button-primary wt_iew_popup_close_btn" style="display:none" type="button" style="margin-right:10px;"><?php esc_html_e('Close', 'order-import-export-for-woocommerce'); ?></button>
 			</div>
