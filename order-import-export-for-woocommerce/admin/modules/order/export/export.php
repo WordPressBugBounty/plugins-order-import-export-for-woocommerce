@@ -25,6 +25,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Export {
 	private $wpo_wcpdf = false;
     private $exclude_line_items = false;
 
+    /** Cached header/column list for the current batch (built once per batch). */
+    private $cached_csv_columns = null;
 
     public function __construct($parent_object) {
 
@@ -90,7 +92,18 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Export {
         return apply_filters('hf_alter_csv_header', $export_columns);
     }
 
-    
+    /**
+     * Return header row for export response. Uses cached header when set by prepare_data_to_export().
+     *
+     * @return array Header/column list (same format as prepare_header()).
+     */
+    public function get_header_row() {
+        if ( isset( $this->cached_csv_columns ) ) {
+            return $this->cached_csv_columns;
+        }
+        return $this->prepare_header();
+    }
+
         public function wt_line_item_separate_row_csv_header($export_columns) {
 
 
@@ -336,11 +349,15 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                     $order_ids = array_intersect($order_ids,$exclude_already_exported_orders);
                 }
                
-                set_transient( $transient_key, $order_ids, 60 ); //valid for 60 seconds
+                set_transient( $transient_key, $order_ids, 3600 ); // 1 hour; aligns with long multi-batch exports
             }   
             $order_ids = apply_filters('wt_ier_modify_order_ids', $order_ids);
             $total_records = count($order_ids);
             $order_ids = array_slice($order_ids, $batch_offset, $limit);
+
+            // Build header once per batch; generate_row_data() will use this cache.
+            $this->cached_csv_columns = $this->prepare_header();
+
             foreach ($order_ids as $order_id) {
                 if(wc_get_order($order_id)){
                     $data_array[] = $this->generate_row_data($order_id);
@@ -374,13 +391,21 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
 
     public function generate_row_data($order_id) {
 
-        $csv_columns = $this->prepare_header();
+        // Use header built once per batch in prepare_data_to_export(); fallback if called elsewhere.
+        $csv_columns = isset( $this->cached_csv_columns ) ? $this->cached_csv_columns : $this->prepare_header();
         $version = WC()->version;
      
         $row = array();
         // Get an instance of the WC_Order object
         $order = wc_get_order($order_id);
         $line_items = $shipping_items = $fee_items = $tax_items = $coupon_items = $refund_items = array();
+
+        // Collect line item IDs and load their meta in one query.
+        $line_item_ids = array();
+        foreach ( $order->get_items() as $item_id => $item ) {
+            $line_item_ids[] = $item_id;
+        }
+        $item_meta_map = self::get_order_line_item_meta_batch( $line_item_ids );
 
         // get line items
         foreach ($order->get_items() as $item_id => $item) {
@@ -389,7 +414,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             if (!is_object($product)) {
                 $product = new WC_Product(0);
             }
-            $item_meta = self::get_order_line_item_meta($item_id);
+            $item_meta = isset( $item_meta_map[ $item_id ] ) ? $item_meta_map[ $item_id ] : array();
             $prod_type = ( version_compare( $version, '3.0.0', '<' ) ) ? $product->product_type : $product->get_type();
             $line_item = array(
                 'name' => html_entity_decode(!empty($item['name']) ? $item['name'] : $product->get_title(), ENT_NOQUOTES, 'UTF-8'),
@@ -995,6 +1020,38 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
         $meta_keys = $wpdb->get_col($wpdb->prepare($query, $placeholder_values));
         // phpcs:enable
         return $meta_keys;
+    }
+
+    /**
+     * Load meta for multiple order line items in one query.
+     * Returns map: order_item_id => array( meta_key => object( meta_value ) ) to match get_order_line_item_meta() structure.
+     *
+     * @param int[] $item_ids Order item IDs.
+     * @return array Map of item_id => meta array (OBJECT_K style per item).
+     */
+    public static function get_order_line_item_meta_batch( $item_ids ) {
+        global $wpdb;
+        $item_ids = array_filter( array_unique( array_map( 'absint', (array) $item_ids ) ) );
+        if ( empty( $item_ids ) ) {
+            return array();
+        }
+        $filtered_meta = apply_filters( 'wt_order_export_select_line_item_meta', array() );
+        $placeholder_values = array();
+        $id_placeholders = implode( ',', array_fill( 0, count( $item_ids ), '%d' ) );
+        $query = "SELECT order_item_id, meta_key, meta_value FROM {$wpdb->prefix}woocommerce_order_itemmeta WHERE order_item_id IN ($id_placeholders)";
+        $placeholder_values = $item_ids;
+        if ( ! empty( $filtered_meta ) ) {
+            $query .= ' AND meta_key IN (' . implode( ', ', array_fill( 0, count( $filtered_meta ), '%s' ) ) . ')';
+            $placeholder_values = array_merge( $placeholder_values, $filtered_meta );
+        }
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Params sanitized (absint); filter supplies keys.
+        $results = $wpdb->get_results( $wpdb->prepare( $query, $placeholder_values ) );
+        // phpcs:enable
+        $map = array_fill_keys( $item_ids, array() );
+        foreach ( $results as $row ) {
+            $map[ (int) $row->order_item_id ][ $row->meta_key ] = (object) array( 'meta_value' => $row->meta_value );
+        }
+        return $map;
     }
 
     public static function get_order_line_item_meta($item_id) {

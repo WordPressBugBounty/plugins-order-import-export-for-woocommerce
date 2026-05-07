@@ -272,7 +272,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order {
                       
         $data_row = $export->prepare_data_to_export($form_data, $batch_offset);
         
-        $header_row = $export->prepare_header(); 
+        $header_row = $export->get_header_row();
 
         $export_data = array(
             'head_data' => $header_row,

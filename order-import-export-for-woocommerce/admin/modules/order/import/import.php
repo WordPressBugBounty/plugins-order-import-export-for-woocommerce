@@ -33,6 +33,20 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
     public $is_sync = '';
     public $is_hpos_enabled = false;
 
+    /**
+     * Cached at batch start to avoid repeated get_option() as import progresses.
+     *
+     * @var bool
+     */
+    private $prices_include_tax = false;
+
+    /**
+     * Cached coupon post ID by code for the current batch (0 = not found).
+     *
+     * @var array<string,int>
+     */
+    private $coupon_post_id_by_code = array();
+
     // Results
     var $import_results = array();
 
@@ -66,6 +80,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         $this->status_mail = !empty($form_data['advanced_form_data']['wt_iew_status_mail']) ? 1 : 0;
                 
         Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Preparing for import.");
+
+        $this->prices_include_tax = ( 'yes' === get_option( 'woocommerce_prices_include_tax' ) );
+        $this->coupon_post_id_by_code = array();
 
         $success = 0;
         $failed = 0;
@@ -1968,10 +1985,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 $order_id = $order->get_id();
             }
 
-            if(isset($data['billing']))
-            $order->set_address($data['billing'], 'billing');
-            if(isset($data['shipping']))
-            $order->set_address($data['shipping'], 'shipping');  
+            $order->set_address( isset( $data['billing'] ) ? $data['billing'] : array(), 'billing' );
+            $order->set_address( isset( $data['shipping'] ) ? $data['shipping'] : array(), 'shipping' );
             
             // Store the concatenated version of billing/shipping address to make searches faster.
             if ($this->is_hpos_enabled) {
@@ -1982,7 +1997,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 update_post_meta($order->get_id(), '_shipping_address_index', implode(' ', $order->get_address('shipping')));
             }
 			
-            $order->set_prices_include_tax( 'yes' === get_option( 'woocommerce_prices_include_tax' ) );
+            $order->set_prices_include_tax( $this->prices_include_tax );
             if( !empty(  $data['order_key']) ){
 		        $order_key = apply_filters( 'woocommerce_generate_order_key', $data['order_key'] );
             }else{
@@ -2245,14 +2260,21 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                         $discount_amount = array_shift($_citem_meta);
                         $discount_amount = substr($discount_amount, strpos($discount_amount, ":") + 1);
 
-                        $coupon_query = new WP_Query(array(
-                            'post_type' => 'shop_coupon',
-                            'post_status' => 'any',
-                            'title' => $coupon_code,
-                            'posts_per_page' => 1,
-                            'fields' => 'ids'
-                        ));
-                        $mypost = !empty($coupon_query->posts) ? get_post($coupon_query->posts[0]) : null;
+                        if ( isset( $this->coupon_post_id_by_code[ $coupon_code ] ) ) {
+                            $cid = $this->coupon_post_id_by_code[ $coupon_code ];
+                            $mypost = $cid ? get_post( $cid ) : null;
+                        } else {
+                            $coupon_query = new WP_Query(array(
+                                'post_type' => 'shop_coupon',
+                                'post_status' => 'any',
+                                'title' => $coupon_code,
+                                'posts_per_page' => 1,
+                                'fields' => 'ids'
+                            ));
+                            $cid = ! empty( $coupon_query->posts ) ? (int) $coupon_query->posts[0] : 0;
+                            $this->coupon_post_id_by_code[ $coupon_code ] = $cid;
+                            $mypost = $cid ? get_post( $cid ) : null;
+                        }
 
                         if ($mypost && $this->merge && $this->is_order_exist) {
                             $order->add_coupon($coupon_code, $discount_amount);
@@ -2264,12 +2286,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                         }
                     }
                 } else {
+                    $wc_order_line_items = $order->get_items();
                     $skip_remove_coupon = false;
                     if ($this->merge && $this->is_order_exist) {
                         $applied_coupons = $order->get_coupon_codes();
                         if (!empty($applied_coupons)) {
                             foreach ($applied_coupons as $coupon) {
-				                foreach($order->get_items() as $item){
+				                foreach ( $wc_order_line_items as $item ) {
 					                if($item->get_product_id()<=0){
 						                $skip_remove_coupon = true;
 						                break;
@@ -2283,7 +2306,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     }
                     $coupon_item = array();
                     $order_items_exists = 1 ; // ensuring products in the order is exists in the site before applying coupon, if any one of the product not exist it make error while applying coupon 
-                    foreach ( $order->get_items() as  $item_key => $item_values ) {
+                    foreach ( $wc_order_line_items as $item_key => $item_values ) {
                         $line_id = $item_values->get_product_id();
                         if($line_id == 0){
                             $order_items_exists = 0;
@@ -2298,14 +2321,21 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                             $discount_amount = array_shift($_citem_meta);
                             $discount_amount = substr($discount_amount, strpos($discount_amount, ":") + 1);
 
-                            $coupon_query = new WP_Query(array(
-                                'post_type' => 'shop_coupon',
-                                'post_status' => 'any',
-                                'title' => $coupon_code,
-                                'posts_per_page' => 1,
-                                'fields' => 'ids'
-                            ));
-                            $mypost = !empty($coupon_query->posts) ? get_post($coupon_query->posts[0]) : null;
+                            if ( isset( $this->coupon_post_id_by_code[ $coupon_code ] ) ) {
+                                $cid = $this->coupon_post_id_by_code[ $coupon_code ];
+                                $mypost = $cid ? get_post( $cid ) : null;
+                            } else {
+                                $coupon_query = new WP_Query(array(
+                                    'post_type' => 'shop_coupon',
+                                    'post_status' => 'any',
+                                    'title' => $coupon_code,
+                                    'posts_per_page' => 1,
+                                    'fields' => 'ids'
+                                ));
+                                $cid = ! empty( $coupon_query->posts ) ? (int) $coupon_query->posts[0] : 0;
+                                $this->coupon_post_id_by_code[ $coupon_code ] = $cid;
+                                $mypost = $cid ? get_post( $cid ) : null;
+                            }
 
                             if ($mypost && $this->merge && $this->is_order_exist && $order_items_exists) {
                                 $order->apply_coupon($coupon_code);

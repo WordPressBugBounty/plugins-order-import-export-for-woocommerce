@@ -4,7 +4,7 @@ Tags: woocommerce export orders, woocommerce import orders, advanced order expor
 Requires at least: 3.0
 Tested up to: 6.9
 Requires PHP: 5.6
-Stable tag: 2.7.2
+Stable tag: 2.7.3
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -30,8 +30,8 @@ The following are functionalities offered by the basic version of the WooCommerc
  &#128312; **Bulk Updates:** Bulk update WooCommerce orders and coupons.
  &#128312; **YITH Compatibility:** Compatible with YITH WooCommerce Order Tracking plugin.
  &#128312; **Export Filters:** Supports various export orders filters (order status, product, coupon, customer, date range) for order export to CSV.
- &#9989; Tested OK with WooCommerce 10.5.3
- &#9989; Tested OK with WordPress 6.9.1
+ &#9989; Tested OK with WooCommerce 10.7.0
+ &#9989; Tested OK with WordPress 6.9.4
  &#9989; Tested OK with PHP 8.3
 
 = Advanced Features for Seamless CSV Export and Import =
@@ -222,16 +222,16 @@ Yes.
 
 == Changelog ==
 
-= 2.7.2 2026-03-10 =
-* [Compatibility] – Tested OK with WooCommerce 10.5.3
-* [Improvement] - Replaced underscores in import/export file names with hyphens.
-* [Improvement] – UI tweaks.
+= 2.7.3 2026-05-06 =
+* [Compatibility] - Tested OK with WordPress 6.9.4
+* [Compatibility] – Tested OK with WooCommerce 10.7.0
+* [Improvement] – Performance enhancement.
 
 [See changelog for all versions](https://plugins.svn.wordpress.org/order-import-export-for-woocommerce/trunk/changelog.txt)
 
 == Upgrade Notice ==
 
-= 2.7.2 =
-* [Compatibility] – Tested OK with WooCommerce 10.5.3
-* [Improvement] - Replaced underscores in import/export file names with hyphens.
-* [Improvement] – UI tweaks.
+= 2.7.3 =
+* [Compatibility] - Tested OK with WordPress 6.9.4
+* [Compatibility] – Tested OK with WooCommerce 10.7.0
+* [Improvement] – Performance enhancement.

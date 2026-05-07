@@ -54,58 +54,176 @@ class Order_Import_Export_Review_Request
     );
     private $plugins_array = array( );
 
+    /** Avoid registering review-banner hooks twice if current_screen runs more than once. */
+    private $review_banner_hooks_registered = false;
+
     public function __construct()
     {
         global $wt_iew_review_banner_shown;
         
         //Set config vars
         $this->set_vars();
+        $this->maybe_backfill_review_request_closed_at();
+
+        add_action('wp_ajax_' . $this->ajax_action_name, array($this, 'process_user_action'));
 
         add_action($this->activation_hook, array($this, 'on_activate'));
         add_action($this->deactivation_hook, array($this, 'on_deactivate'));
         add_action('admin_notices', array($this, 'show_banner_cta'));
 
-        
-        if ($this->check_condition()) /* checks the banner is active now */ {  
-            
-            $post_type = $this->current_post_type; 
-
-            // Determine which plugin URL to use based on post type
-            foreach ($this->plugins_array as $plugin) {
-                if (in_array($post_type, $plugin['post_types'])) {
-                    $this->review_url = $plugin['url'];
-                    break;
-                }
-            }
-            
-            $wt_iew_review_banner_shown = true;
-
-            add_action('init', function() {
-            
-                // translators: 1: bold tag open, 2: bold tag close
-                $this->banner_message = sprintf(__('Hey, we at %1$sWebToffee%2$s would like to thank you for using our plugin. We would really appreciate if you could take a moment to drop a quick review that will inspire us to keep going.', 'order-import-export-for-woocommerce'), '<b>', '</b>');
-
-                // translators: 1: star emoji, 2: span tag open, 3: span tag close, 4: span tag open, 5: span tag close
-                $this->new_review_banner_title = sprintf(__('%1$s  %2$s  Loving %3$s  WebToffee Import Export plugin? %4$s  Share Your Feedback! %5$s', 'order-import-export-for-woocommerce'), '🌟', '<span style="font-weight:300;">', '</span>', '<span style="font-weight:300;">', '</span>');
-
-                /* button texts */
-                $this->later_btn_text   = __("Remind me later", 'order-import-export-for-woocommerce');
-                $this->never_btn_text   = __("Not interested", 'order-import-export-for-woocommerce');
-                $this->review_btn_text  = __("Review now", 'order-import-export-for-woocommerce');
-                $this->review_btn_new_text = __("You deserve it", 'order-import-export-for-woocommerce');
-                $this->later_btn_new_text = __("Nope, maybe later", 'order-import-export-for-woocommerce');
-                $this->already_did_btn_new_text = __("I already did", 'order-import-export-for-woocommerce');
-
-            });
-
-            add_action('admin_notices', array($this, 'show_banner')); /* show banner */
-            add_action('admin_print_footer_scripts', array($this, 'add_banner_scripts')); /* add banner scripts */
-            add_action('wp_ajax_' . $this->ajax_action_name, array($this, 'process_user_action')); /* process banner user action */
-        }
+        /*
+         * get_current_screen() is not loaded until wp-admin/includes/screen.php (after plugins load).
+         * Register review hooks on current_screen so the screen id and helper exist.
+         */
+        add_action('current_screen', array($this, 'register_review_banner_hooks_for_screen'), 10, 1);
 
         // Register WooCommerce Pages Banner
         add_action('admin_notices', array($this, 'show_wc_pages_banner'));
         add_action('wp_ajax_wt_iew_dismiss_wc_pages_banner', array($this, 'dismiss_wc_pages_banner_ajax'));
+    }
+
+    /**
+     * Runs once the admin screen is set; wires common vs type-specific review banners.
+     *
+     * @since 2.7.3
+     *
+     * @param WP_Screen|null $screen Current admin screen.
+     */
+    public function register_review_banner_hooks_for_screen( $screen )
+    {
+        if ($this->review_banner_hooks_registered) {
+            return;
+        }
+
+        global $wt_iew_review_banner_shown;
+
+        $page_kind = $this->check_current_page($screen);
+        if ( 'common_allowed_page' === $page_kind ) {
+            /*
+             * Global banner: DB-driven winner post type. Type-specific eligibility runs in show_banner_in_type_specific_pages().
+             */
+            if ( $this->check_condition() ) {
+
+                $post_type = $this->current_post_type;
+
+                foreach ($this->plugins_array as $plugin) {
+                    if (in_array($post_type, $plugin['post_types'], true)) {
+                        $this->review_url = $plugin['url'];
+                        break;
+                    }
+                }
+
+                $wt_iew_review_banner_shown = true;
+
+                $this->configure_review_banner_copy();
+
+                add_action('admin_notices', array($this, 'show_banner'));
+                add_action('admin_print_footer_scripts', array($this, 'add_banner_scripts'));
+                $this->review_banner_hooks_registered = true;
+            }
+        } elseif ( 'type_specific_allowed_page' === $page_kind ) {
+            if ( isset( $wt_iew_review_banner_shown ) && true === $wt_iew_review_banner_shown ) {
+                return;
+            }
+            /*
+             * Contextual banners: eligibility per screen-derived item_type in show_banner_in_type_specific_pages().
+             */
+            add_action('admin_notices', array($this, 'show_banner_in_type_specific_pages'), 5);
+            add_action('admin_print_footer_scripts', array($this, 'add_banner_scripts'));
+            $this->review_banner_hooks_registered = true;
+        }
+    }
+
+    /**
+     * item_type (history / banner family) → screen ids where the contextual review banner may run.
+     *
+     * WooCommerce → Reports (`woocommerce_page_wc-reports`) is listed for both order-family and user-family
+     * types; {@see self::get_item_type_from_screen()} picks `order` vs `user` from the active Reports tab.
+     *
+     * @since 2.7.3
+     *
+     * @return array<string, string[]>
+     */
+    private function get_type_specific_pages_map()
+    {
+        $order_family = array(
+            'edit-shop_order',
+            'shop_order',
+            'woocommerce_page_wc-orders',
+            'edit-shop_coupon',
+            'edit-shop_subscription',
+            'shop_subscription',
+            'woocommerce_page_wc-reports',
+        );
+        $product_pages = array('edit-product', 'product');
+        $user_screens   = array('users', 'woocommerce_page_wc-reports');
+
+        return array(
+            'order'              => $order_family,
+            'coupon'             => $order_family,
+            'subscription'       => $order_family,
+            'product'            => $product_pages,
+            'product_review'     => $product_pages,
+            'product_categories' => $product_pages,
+            'product_tags'       => $product_pages,
+            'user'               => $user_screens,
+        );
+    }
+
+    /**
+     * Active tab on WooCommerce → Reports (used to map one screen id to order vs. user review context).
+     *
+     * @since 2.7.3
+     *
+     * @return string Sanitized tab slug (e.g. orders, customers).
+     */
+    private function get_wc_reports_tab_slug()
+    {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only UI context.
+        return isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'orders';
+    }
+
+    /**
+     * Classify the admin screen for review-banner routing (common vs type-specific).
+     *
+     * @since 2.7.3
+     *
+     * @param WP_Screen|null $screen Current admin screen (from current_screen hook).
+     * @return string|null 'common_allowed_page'|'type_specific_allowed_page'|null
+     */
+    private function check_current_page( $screen )
+    {
+        if (!$screen || !isset($screen->id)) {
+            return null;
+        }
+
+        $plugin_pages = array('toplevel_page_wt_import_export_for_woo_basic_export', 
+            'webtoffee-import-export-basic_page_wt_import_export_for_woo_basic_import', 
+            'webtoffee-import-export-basic_page_wt_iew_scheduled_job',
+            'webtoffee-import-export-basic_page_wt_import_export_for_woo_basic', 
+            'toplevel_page_wt_import_export_for_woo_export', 
+            'webtoffee-import-export-pro_page_wt_import_export_for_woo_import', 
+            'webtoffee-import-export-pro_page_wt_import_export_for_woo_history', 
+            'webtoffee-import-export-pro_page_wt_import_export_for_woo_history_log', 
+            'webtoffee-import-export-pro_page_wt_import_export_for_woo_cron', 
+            'webtoffee-import-export-pro_page_wt_import_export_for_woo'
+        );
+
+        // Common pages for all types (WooCommerce → Reports is type_specific only: tab maps order vs user).
+        $allowed_pages = array_merge($plugin_pages, array('dashboard', 'plugins', 'woocommerce_page_wc-admin'));
+
+        if (in_array($screen->id, $allowed_pages, true)) {
+            return 'common_allowed_page';
+        } 
+
+        $type_specific_pages = $this->get_type_specific_pages_map();
+
+        $item_type = $this->get_item_type_from_screen($screen);
+        if ($item_type && isset($type_specific_pages[ $item_type ]) && in_array($screen->id, $type_specific_pages[ $item_type ], true)) {
+            return 'type_specific_allowed_page';
+        }
+
+        return null;
     }
 
     /**
@@ -145,7 +263,145 @@ class Order_Import_Export_Review_Request
                 'url' => 'https://wordpress.org/support/plugin/users-customers-import-export-for-wp-woocommerce/reviews/#new-post'
             ),
         );
-    } 
+    }
+
+    /**
+     * Which Import/Export plugin the current job context maps to (array key from plugins_array).
+     *
+     * @since 2.7.3
+     *
+     * @return string 'order'|'products'|'users'
+     */
+    private function get_review_banner_plugin_key()
+    {
+        foreach ($this->plugins_array as $key => $plugin) {
+            if (in_array($this->current_post_type, $plugin['post_types'], true)) {
+                return $key;
+            }
+        }
+        return 'order';
+    }
+
+    /**
+     * CSS modifier slug for banner theming.
+     *
+     * @since 2.7.3
+     *
+     * @return string 'order'|'product'|'user'
+     */
+    private function get_review_banner_theme_slug()
+    {
+        $key = $this->get_review_banner_plugin_key();
+        if ('products' === $key) {
+            return 'product';
+        }
+        if ('users' === $key) {
+            return 'user';
+        }
+        return 'order';
+    }
+
+    /**
+     * Right-rail illustration per basic plugin (SVG intrinsic size from asset).
+     *
+     * @since 2.7.3
+     *
+     * @return array{url:string,width?:int,height?:int}
+     */
+    private function get_review_banner_illustration_assets()
+    {
+        $key = $this->get_review_banner_plugin_key();
+        $base = WT_O_IEW_PLUGIN_URL . 'assets/images/';
+        $map  = array(
+            'order'    => array(
+                'url'    => $base . 'wt_order_review_banner_logo.svg',
+                'width'  => 158,
+                'height' => 155,
+            ),
+            'products' => array(
+                'url'    => $base . 'wt_product_review_banner_logo.svg',
+                'width'  => 158,
+                'height' => 161,
+            ),
+            'users'    => array(
+                'url'    => $base . 'wt_user_review_banner_logo.svg',
+                'width'  => 164,
+                'height' => 162,
+            ),
+        );
+        if (isset($map[ $key ])) {
+            return $map[ $key ];
+        }
+        return array( 'url' => $this->review_request_bg );
+    }
+
+    /**
+     * Titles, body copy, and primary CTA label per plugin.
+     *
+     * @since 2.7.3
+     */
+    private function configure_review_banner_copy()
+    {
+        $key = $this->get_review_banner_plugin_key();
+
+        $this->later_btn_new_text       = __('Nope, maybe later', 'order-import-export-for-woocommerce');
+        $this->already_did_btn_new_text = __('I already did', 'order-import-export-for-woocommerce');
+        $this->later_btn_text           = __('Remind me later', 'order-import-export-for-woocommerce');
+        $this->never_btn_text           = __('Not interested', 'order-import-export-for-woocommerce');
+        $this->review_btn_text          = __('Review now', 'order-import-export-for-woocommerce');
+
+        $this->banner_message = sprintf(
+            /* translators: 1: bold open, 2: bold close */
+            __('Hey, we at %1$sWebToffee%2$s would like to thank you for using our plugin. We would really appreciate if you could take a moment to drop a quick review that will inspire us to keep going.', 'order-import-export-for-woocommerce'),
+            '<b>',
+            '</b>'
+        );
+
+        $para2 = '<p class="wbtf-review-banner__para wbtf-review-banner__para--cta">'
+            . '<span class="wbtf-review-banner__cta-regular">' . esc_html__(
+                'If you found the plugin helpful, please leave us a quick ',
+                'order-import-export-for-woocommerce'
+            ) . '</span>'
+            . '<span class="wbtf-review-banner__cta-strong">' . esc_html__(
+                '5-star review',
+                'order-import-export-for-woocommerce'
+            ) . '</span>'
+            . '<span class="wbtf-review-banner__cta-regular">' . esc_html__(
+                '. It would mean the world to us.',
+                'order-import-export-for-woocommerce'
+            ) . '</span>'
+            . '</p>';
+
+        switch ($key) {
+            case 'products':
+                $this->new_review_banner_title = __('Updating products easily with WebToffee Import Export?', 'order-import-export-for-woocommerce');
+                $this->new_review_banner_message = '<p class="wbtf-review-banner__para">' . esc_html__('Hi there,', 'order-import-export-for-woocommerce') . '<br />' . esc_html__(
+                    'we are thrilled to see you making great use of our WooCommerce product import export plugin. It\'s our mission to make data management as efficient as possible for you.',
+                    'order-import-export-for-woocommerce'
+                ) . '</p>' . $para2;
+                $this->review_btn_new_text = __('Review Product Import Export', 'order-import-export-for-woocommerce');
+                break;
+
+            case 'users':
+                $this->new_review_banner_title = __('Handling user data smoothly with WebToffee Import Export?', 'order-import-export-for-woocommerce');
+                $this->new_review_banner_message = '<p class="wbtf-review-banner__para">' . esc_html__('Hi there,', 'order-import-export-for-woocommerce') . '<br />' . esc_html__(
+                    'we are thrilled to see you making great use of our WooCommerce user import export plugin. It\'s our mission to make data management as efficient as possible for you.',
+                    'order-import-export-for-woocommerce'
+                ) . '</p>' . $para2;
+                $this->review_btn_new_text = __('Review User Import Export', 'order-import-export-for-woocommerce');
+                break;
+
+            case 'order':
+            default:
+                $this->new_review_banner_title = __('Managing orders smoothly with WebToffee Import Export?', 'order-import-export-for-woocommerce');
+                $this->new_review_banner_message = '<p class="wbtf-review-banner__para">' . esc_html__('Hi there,', 'order-import-export-for-woocommerce') . '<br />' . esc_html__(
+                    'we are thrilled to see you making great use of our WooCommerce order import export plugin. It\'s our mission to make data management as efficient as possible for you.',
+                    'order-import-export-for-woocommerce'
+                ) . '</p>' . $para2;
+                $this->review_btn_new_text = __('Review Order Import Export', 'order-import-export-for-woocommerce');
+                break;
+        }
+    }
 
     /**
      *	Actions on plugin activation
@@ -174,120 +430,264 @@ class Order_Import_Export_Review_Request
     }
 
     /**
+     * On admin-ajax.php, current_post_type is not set from the screen that rendered the banner.
+     * Read a whitelisted item_type from POST (set from the banner data attribute) so the correct option prefix updates.
+     */
+    private function wt_iew_apply_review_item_type_from_request()
+    {
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- POST only on admin-ajax; process_user_action() calls check_ajax_referer first.
+        if ( ! isset( $_POST['wt_review_item_type'] ) ) {
+            return;
+        }
+        $posted = sanitize_text_field( wp_unslash( $_POST['wt_review_item_type'] ) );
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
+        if ( '' === $posted ) {
+            return;
+        }
+        foreach ( $this->plugins_array as $plugin ) {
+            if ( ! empty( $plugin['post_types'] ) && in_array( $posted, $plugin['post_types'], true ) ) {
+                $this->current_post_type = $posted;
+                return;
+            }
+        }
+    }
+
+    /**
      *	Update the banner state 
      */
     private function update_banner_state($val)
     {
-        // Get post type and find matching plugin prefix from cache
         $post_type = $this->current_post_type;
+        $prefix    = $this->plugin_prefix;
         foreach ($this->plugins_array as $plugin) {
-            if (in_array($post_type, $plugin['post_types'])) {
-                $prefix = isset($plugin['prefix']) ?  $plugin['prefix'] :  $this->plugin_prefix;
+            if (in_array($post_type, $plugin['post_types'], true)) {
+                $prefix = isset($plugin['prefix']) ? $plugin['prefix'] : $prefix;
                 break;
             }
         }
-        
-        // Update option with prefix
-        update_option($prefix . "_review_request", $val);
+
+        update_option($prefix . '_review_request', $val);
+
+        /*
+         * State 3 = closed / not interested / never (incl. third "later"); state 4 = user chose "Review".
+         * Same timestamp drives the ~60-day common-banner rotation for the next plugin family.
+         */
+        if ( in_array((int) $val, array(3, 4), true) ) {
+            update_option($prefix . '_review_request_closed_at', time());
+        }
     }
 
     /**
-     *	Prints the banner 
+     * Pre-update installs: for each IE plugin in plugins_array, if state is 3 (closed) or 4 (reviewed) but
+     * _review_request_closed_at is missing, set it once to current time (older versions).
+     * Called from __construct() after set_vars() so plugins_array and options exist.
+     *
+     * @since 2.7.3
+     */
+    private function maybe_backfill_review_request_closed_at()
+    {
+        foreach ($this->plugins_array as $plugin) {
+            if (empty($plugin['prefix'])) {
+                continue;
+            }
+            $prefix = $plugin['prefix'];
+            $state  = absint(get_option($prefix . '_review_request', 0));
+            if (!in_array($state, array(3, 4), true)) {
+                continue;
+            }
+            if (absint(get_option($prefix . '_review_request_closed_at', 0)) > 0) {
+                continue;
+            }
+            update_option($prefix . '_review_request_closed_at', time());
+        }
+    }
+
+    /**
+     * Eligibility for contextual (type-specific admin) review banners.
+     *
+     * Returns false if {prefix}_review_request is not in the same allowed set as check_condition()
+     * (closed / reviewed, etc.). Otherwise true when either: (1) at least 5 days since install
+     * ({prefix}_start_date), or (2) at least 10 successful jobs for this item_type in wt_iew_action_history.
+     *
+     * @since 2.7.3
+     *
+     * @param string|null $item_type Screen-derived type, e.g. order, coupon, subscription, product, user.
+     * @return bool
+     */
+    public function check_condition_for_item_specific_pages( $item_type )
+    {
+        if (!$item_type || !is_string($item_type)) {
+            return false;
+        }
+
+        $prefix = null;
+        foreach ($this->plugins_array as $plugin) {
+            if (!empty($plugin['post_types']) && in_array($item_type, $plugin['post_types'], true)) {
+                $prefix = isset($plugin['prefix']) ? $plugin['prefix'] : null;
+                break;
+            }
+        }
+        if (!$prefix) {
+            return false;
+        }
+
+        $banner_state = absint(get_option($prefix . '_review_request', 0));
+        if (!in_array($banner_state, array(0, 1, 2, 5), true)) {
+            return false;
+        }
+
+        $installed = absint(get_option($prefix . '_start_date', 0));
+        if ($installed && floor((time() - $installed) / DAY_IN_SECONDS) >= 5) {
+            return true;
+        }
+
+        global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Count for banner rule.
+        $count = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}wt_iew_action_history WHERE status = %d AND item_type = %s",
+                1,
+                $item_type
+            )
+        );
+        // phpcs:enable
+
+        return $count >= 10;
+    }
+
+    /**
+     * Contextual review banner: order / product / user screens map to an item_type, then eligibility runs for that type only.
+     *
+     * Differs from show_banner(), which uses check_condition()'s single global "winner" item_type for dashboard,
+     * Import/Export screens, Plugins, and WooCommerce Home.
+     *
+     * @since 2.7.3
+     */
+    public function show_banner_in_type_specific_pages()
+    {
+   
+        global $wt_iew_review_banner_shown;
+        if ( isset( $wt_iew_review_banner_shown ) && true === $wt_iew_review_banner_shown ) {
+            return;
+        }
+
+        $currentScreen = get_current_screen();
+        $type_specific_pages = $this->get_type_specific_pages_map();
+
+        $item_type = $this->get_item_type_from_screen($currentScreen);
+        if (!$item_type || !isset($type_specific_pages[ $item_type ]) || !in_array($currentScreen->id, $type_specific_pages[ $item_type ], true)) {
+            return;
+        }
+
+        if (!$this->check_condition_for_item_specific_pages($item_type)) {
+            return;
+        }
+
+        $this->current_post_type = $item_type;
+        foreach ($this->plugins_array as $plugin) {
+            if (in_array($item_type, $plugin['post_types'], true)) {
+                $this->review_url = $plugin['url'];
+                break;
+            }
+        }
+        $this->configure_review_banner_copy();
+
+        $this->print_review_request_banner_markup();
+    }
+
+    /**
+     * Map admin screen to wt_iew_action_history item_type, or null.
+     *
+     * On WooCommerce → Reports, the screen id alone is ambiguous: `orders` tab → order, `customers` → user;
+     * other tabs return null so no IE review banner targets them.
+     *
+     * @since 2.7.3
+     *
+     * @param WP_Screen|null $screen Screen object.
+     * @return string|null
+     */
+    private function get_item_type_from_screen($screen)
+    {
+        if (!$screen || !isset($screen->id)) {
+            return null;
+        }
+        $id = $screen->id;
+        if ('woocommerce_page_wc-reports' === $id) {
+            $tab = $this->get_wc_reports_tab_slug();
+            if ('orders' === $tab) {
+                return 'order';
+            }
+            if ('customers' === $tab) {
+                return 'user';
+            }
+            return null;
+        }
+        if ('edit-shop_coupon' === $id) {
+            return 'coupon';
+        }
+        if ('edit-shop_subscription' === $id || 'shop_subscription' === $id) {
+            return 'subscription';
+        }
+        if (in_array($id, array('edit-shop_order', 'shop_order', 'woocommerce_page_wc-orders'), true)) {
+            return 'order';
+        }
+        if (in_array($id, array('edit-product', 'product', 'edit-product_cat', 'edit-product_tag'), true)) {
+            return 'product';
+        }
+        if ('users' === $id) {
+            return 'user';
+        }
+        return null;
+    }
+
+    /**
+     * Shared HTML for global and contextual review banners.
+     *
+     * @since 2.7.3
+     */
+    private function print_review_request_banner_markup()
+    {
+        global $wt_iew_review_banner_shown;
+
+        $wt_iew_review_banner_shown = true;
+
+        $theme_slug   = $this->get_review_banner_theme_slug();
+        $illustration = $this->get_review_banner_illustration_assets();
+
+        ?>
+        <div class="<?php echo esc_attr($this->banner_css_class); ?> notice notice-info is-dismissible wbtf-review-banner wbtf-review-banner--<?php echo esc_attr($theme_slug); ?>" data-wt-review-item-type="<?php echo esc_attr( (string) $this->current_post_type ); ?>">
+            <div class="wbtf-review-banner__box">
+                <span class="wbtf-review-banner__accent" aria-hidden="true"></span>
+                <div class="wbtf-review-banner__main">
+                    <h3 class="wbtf-review-banner__title"><?php echo esc_html($this->new_review_banner_title); ?></h3>
+                    <div class="wbtf-review-banner__text">
+                        <?php echo wp_kses_post($this->new_review_banner_message); ?>
+                    </div>
+                    <div class="wbtf-review-banner__actions wbtf-btns-wrap">
+                        <a href="#" class="button wbtf-button-primary" data-type="review"><?php echo esc_html($this->review_btn_new_text); ?></a>
+                        <a href="#" class="button wbtf-button-secondary" data-type="later"><?php echo esc_html($this->later_btn_new_text); ?></a>
+                        <a href="#" class="wbtf-review-link" data-type="never"><?php echo esc_html($this->already_did_btn_new_text); ?></a>
+                    </div>
+                </div>
+                <div class="wbtf-review-banner__media" aria-hidden="true">
+                    <?php if (isset($illustration['width'], $illustration['height'])) : ?>
+                        <img class="wbtf-review-banner__img" src="<?php echo esc_url($illustration['url']); ?>" width="<?php echo esc_attr((string) $illustration['width']); ?>" height="<?php echo esc_attr((string) $illustration['height']); ?>" alt="">
+                    <?php else : ?>
+                        <img class="wbtf-review-banner__img wbtf-review-banner__img--legacy" src="<?php echo esc_url($illustration['url']); ?>" alt="">
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * Prints the common (global winner) review banner. WooCommerce → Reports is not a common screen;
+     * Reports uses {@see self::show_banner_in_type_specific_pages()} only (no duplicate tab logic here).
      */
     public function show_banner()
     {
-        $border_radius = $border_color = $banner_color = '';
-        $post_type = $this->current_post_type; 
-        $currentScreen = get_current_screen(); 
-
-        $plugin_pages = array('toplevel_page_wt_import_export_for_woo_basic_export', 
-            'webtoffee-import-export-basic_page_wt_import_export_for_woo_basic_import', 
-            'webtoffee-import-export-basic_page_wt_iew_scheduled_job',
-            'webtoffee-import-export-basic_page_wt_import_export_for_woo_basic', 
-            'toplevel_page_wt_import_export_for_woo_export', 
-            'webtoffee-import-export-pro_page_wt_import_export_for_woo_import', 
-            'webtoffee-import-export-pro_page_wt_import_export_for_woo_history', 
-            'webtoffee-import-export-pro_page_wt_import_export_for_woo_history_log', 
-            'webtoffee-import-export-pro_page_wt_import_export_for_woo_cron', 
-            'webtoffee-import-export-pro_page_wt_import_export_for_woo'
-        );
-
-        // Common pages for all types
-        $allowed_pages = array_merge($plugin_pages, array('dashboard', 'plugins', 'woocommerce_page_wc-admin'));
-
-        // Post type specific pages
-        $type_specific_pages = array(
-            'order' => array('edit-shop_order', 'shop_order', 'edit-shop_coupon', 'edit-shop_subscription', 'shop_subscription', 'woocommerce_page_wc-reports', 'woocommerce_page_wc-admin'),
-            'coupon' => array('edit-shop_order', 'shop_order', 'edit-shop_coupon', 'edit-shop_subscription', 'shop_subscription', 'woocommerce_page_wc-reports', 'woocommerce_page_wc-admin'),
-            'subscription' => array('edit-shop_order', 'shop_order', 'edit-shop_coupon', 'edit-shop_subscription', 'shop_subscription', 'woocommerce_page_wc-reports'),
-            'product' => array('edit-product', 'product'),
-            'product_review' => array('edit-product', 'product'),
-            'product_categories' => array('edit-product', 'product'),
-            'product_tags' => array('edit-product', 'product'),
-            'user' => array('users', 'woocommerce_page_wc-reports')
-        );
-
-        // Add type specific pages if they exist for current post type
-        if (isset($type_specific_pages[$post_type])) {
-            $allowed_pages = array_merge($allowed_pages, $type_specific_pages[$post_type]);
-        }
-
-        // Check if current screen is allowed
-        if (!in_array($currentScreen->id, $allowed_pages)) {
-            return;
-        } 
-        
-        // Check WC Reports tab if applicable
-        if ($currentScreen->id === 'woocommerce_page_wc-reports') {
-            // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Nonce not required.
-            $current_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'orders';
-            // phpcs:enable
-            $required_tab = in_array($post_type, array('order', 'coupon', 'subscription')) ? 'orders' : 
-            ($post_type === 'user' ? 'customers' : '');
-            if (!$required_tab || $current_tab !== $required_tab) {
-                return;
-            }
-        }
-
-        // $this->update_banner_state(1); /* update banner active state */
-        $current_user = wp_get_current_user();
-        $user_first_name = !empty($current_user->first_name) ? $current_user->first_name : __('there', 'order-import-export-for-woocommerce');
-
-        if(in_array($currentScreen->id, $plugin_pages)){
-            $banner_color = 'rgba(233, 242, 252, 1)';
-            $border_radius = '8px'; 
-            $border_color = '#A0B2D6';
-            // translators: 1: user first name, 2: br tag, 3: bold tag open, 4: bold tag close, 5: bold tag open, 6: bold tag close, 7: bold tag open, 8: bold tag close
-            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. If you found the plugin helpful, please leave us a quick %7$s 5-star review. %8$s', 'order-import-export-for-woocommerce'),  '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<b>', '</b>');
-        }else{
-            $banner_color = '#ffffff';
-            $border_color = '#ffffff';
-            // translators: 1: user first name, 2: br tag, 3: bold tag open, 4: bold tag close, 5: bold tag open, 6: bold tag close, 7: br tag, 8: bold tag open, 9: bold tag close, 10: br tag, 11: br tag, 12: bold tag open, 13: bold tag close
-            $this->new_review_banner_message = sprintf(__('Hi  %1$s, %2$s We’re thrilled to see you making great use of our WooCommerce import export plugin! It’s our mission to make %3$s data management %4$s as %5$s efficient %6$s as possible for you. %7$s If you found the plugin helpful, please leave us a quick %8$s 5-star review. %9$s It would mean the world to us. %10$s Warm regards, %11$s Team WebToffee %12$s', 'order-import-export-for-woocommerce'), '<b>' . $user_first_name . '</b>', '<br>', '<b>', '</b>', '<b>', '</b>', '<br><br>', '<b>', '</b>', '<br><br>', '<br><b>', '</b>');
-        }
-
-    ?>
-        <div class="<?php echo esc_attr($this->banner_css_class); ?> notice-info notice is-dismissible " style="padding: 20px; border: 1px solid <?php echo esc_attr($border_color); ?>; border-radius: <?php echo esc_attr($border_radius); ?>; background-color: <?php echo esc_attr($banner_color); ?>; );">
-        <?php
-        if ("" !== $this->webtoffee_logo_url) {
-        ?>
-            <h3 style="margin: 10px 0;"><?php echo wp_kses_post($this->new_review_banner_title); ?></h3>
-        <?php } ?>
-            <div class="wbtf-review-content-wrap">
-                <p style="width: 65%;">
-        <?php echo wp_kses_post($this->new_review_banner_message); ?>
-                </p>
-                <p class="wbtf-btns-wrap">
-                    <a class="button  wbtf-button-primary"   data-type="review"><?php echo wp_kses_post($this->review_btn_new_text); ?></a>
-                    <a class="button  wbtf-button-secondary" style="color:#333; border-color:#ccc; background:#efefef;" data-type="later"><?php echo wp_kses_post($this->later_btn_new_text); ?></a>
-                    <a class="button  wbtf-button-secondary" style="color:#333; border-color:#ccc; background:#efefef;" data-type="never"><?php echo wp_kses_post($this->already_did_btn_new_text); ?></a>
-                </p>
-            </div>
-            <figure class="wbtf_review_background_img_wrap">
-                <img src="<?php echo esc_url($this->review_request_bg); ?>" alt="wbtf-background">
-            </figure>
-        </div>
-        <?php
+        $this->print_review_request_banner_markup();
     }
 
     /**
@@ -296,6 +696,7 @@ class Order_Import_Export_Review_Request
     public function process_user_action()
     {
         check_ajax_referer($this->plugin_prefix);
+        $this->wt_iew_apply_review_item_type_from_request();
         if (isset($_POST['wt_review_action_type'])) {
             $action_type = sanitize_text_field(wp_unslash($_POST['wt_review_action_type']));
 
@@ -330,50 +731,245 @@ class Order_Import_Export_Review_Request
      */
     public function add_banner_scripts()
     {
+        if (!empty($GLOBALS['wt_iew_review_banner_footer_printed'])) {
+            return;
+        }
+        $GLOBALS['wt_iew_review_banner_footer_printed'] = true;
+
         $ajax_url = admin_url('admin-ajax.php');
         $nonce = wp_create_nonce($this->plugin_prefix);
     ?>
         <style type="text/css">
-            .wbtf_review_background_img_wrap { position: absolute; bottom: 0; right: 0; width: 75%; height: 50%; overflow: hidden; margin: 0; z-index: 1; padding: 10px 0; }
-            .wbtf_review_background_img_wrap img { width: 100%; height: 110%; object-fit: cover; }
-            .wbtf-review-content-wrap { padding-left: 22px; z-index: 9; position: relative; padding-top: 9px; }
-            .notice-info .wbtf-button-primary  { background: #2860F4 !important; color: #FFF !important; padding: 2px 10px !important; border: 1px solid #2860F4; }
-            .notice-info .wbtf-button-secondary { background: #fff !important; color: #000 !important; padding: 2px 10px !important; border: 1px solid #C3C4C7; }
-            .notice-info .wbtf-btns-wrap { margin-top: 20px; }
-            .notice-info .wbtf-btns-wrap a { margin-right: 6px; }
-            @media (max-width: 800px) { .wbtf_review_background_img_wrap {  display: none; } } 
-
+            /* Scope: must match $this->banner_css_class (wt_o_iew_basic + _review_request). */
+            .wt_o_iew_basic_review_request.wbtf-review-banner.wbtf-review-banner--order {
+                --wbtf-review-accent: #1B89E1;
+                --wbtf-review-primary: #1B89E1;
+                --wbtf-review-primary-hover: #187AC8;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner.wbtf-review-banner--product {
+                --wbtf-review-accent: #0B7CB7;
+                --wbtf-review-primary: #0E9FDE;
+                --wbtf-review-primary-hover: #0c87bd;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner.wbtf-review-banner--user {
+                --wbtf-review-accent: #5B2C9B;
+                --wbtf-review-primary: #7B4DC8;
+                --wbtf-review-primary-hover: #6a3fb0;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner.notice {
+                position: relative;
+                padding: 12px 8px;
+                margin: 12px 0;
+                border: none;
+                box-shadow: none;
+                background: transparent;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .notice-dismiss {
+                text-decoration: none;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__box {
+                display: flex;
+                flex-wrap: nowrap;
+                align-items: stretch;
+                background: #fff;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                overflow: hidden;
+                padding-right: 42px;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__accent {
+                width: 4px;
+                flex-shrink: 0;
+                background: var(--wbtf-review-accent, #153F95);
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__main {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 20px 8px 20px 20px;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__kind {
+                margin: 0 0 6px;
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--wbtf-review-primary, #2860F4);
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__title {
+                margin: 0 0 10px;
+                font-size: 18px;
+                line-height: 1.35;
+                font-weight: 700;
+                color: #0f172a;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__text {
+                max-width: 52rem;
+                color: #64748b;
+            }
+            /* Body copy: system UI stack (WP admin-like), 14px / regular / line-height 18px */
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__text .wbtf-review-banner__para:not(.wbtf-review-banner__para--cta) {
+                margin: 0 0 10px;
+                font-size: 14px;
+                font-weight: 400;
+                font-style: normal;
+                line-height: 18px;
+                letter-spacing: 0;
+                text-indent: 0;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__text .wbtf-review-banner__para--cta {
+                margin: 0 0 10px;
+                font-size: 14px;
+                font-weight: 400;
+                font-style: normal;
+                letter-spacing: 0;
+                text-indent: 0;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__cta-regular {
+                display: inline;
+                font-size: 14px;
+                font-weight: 400;
+                font-style: normal;
+                line-height: 100%;
+                letter-spacing: 0;
+                text-indent: 0;
+                vertical-align: baseline;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__cta-strong {
+                display: inline;
+                font-size: 14px;
+                font-weight: 500;
+                font-style: normal;
+                line-height: 17px;
+                letter-spacing: 0;
+                text-indent: 0;
+                vertical-align: baseline;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__para:last-child {
+                margin-bottom: 0;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__actions {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 10px 14px;
+                margin-top: 18px;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-primary.button {
+                background: var(--wbtf-review-primary, #2860F4) !important;
+                color: #fff !important;
+                border: 1px solid var(--wbtf-review-primary, #2860F4) !important;
+                border-radius: 6px !important;
+                padding: 6px 14px !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
+                line-height: 1.4 !important;
+                box-shadow: none !important;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-primary.button:hover,
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-primary.button:focus {
+                background: var(--wbtf-review-primary-hover, #1d52d6) !important;
+                border-color: var(--wbtf-review-primary-hover, #1d52d6) !important;
+                color: #fff !important;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-secondary.button {
+                background: #fff !important;
+                color: var(--wbtf-review-primary, #2860F4) !important;
+                border: 1px solid var(--wbtf-review-primary, #2860F4) !important;
+                border-radius: 6px !important;
+                padding: 6px 14px !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
+                line-height: 1.4 !important;
+                box-shadow: none !important;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-secondary.button:hover,
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-secondary.button:focus {
+                background: #f8fafc !important;
+                color: var(--wbtf-review-primary-hover, #1d52d6) !important;
+                border-color: var(--wbtf-review-primary-hover, #1d52d6) !important;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-link {
+                margin: 0;
+                padding: 0 2px;
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--wbtf-review-primary, #2860F4);
+                text-decoration: none;
+                background: none;
+                border: none;
+                cursor: pointer;
+                box-shadow: none;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-link:hover,
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-link:focus {
+                color: var(--wbtf-review-primary-hover, #1d52d6);
+                text-decoration: underline;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__media {
+                flex: 0 0 auto;
+                display: flex;
+                justify-content: center;
+                padding: 8px 20px 12px 12px;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__img {
+                display: block;
+                width: auto;
+                max-width: 100%;
+                max-height: 170px;
+                height: auto;
+            }
+            .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__img--legacy {
+                width: auto;
+                max-width: 200px;
+                max-height: 130px;
+                object-fit: contain;
+            }
+            @media (max-width: 782px) {
+                .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__box {
+                    flex-wrap: wrap;
+                }
+                .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-review-banner__media {
+                    width: 100%;
+                    order: -1;
+                    padding-top: 16px;
+                }
+            }
         </style>
         <script type="text/javascript">
             (function($) {
                 "use strict";
 
-                /* prepare data object */
                 var data_obj = {
                     _wpnonce: '<?php echo esc_js($nonce); ?>',
                     action: '<?php echo esc_js($this->ajax_action_name); ?>',
                     wt_review_action_type: ''
                 };
 
-                $(document).on('click', '.<?php echo esc_js($this->banner_css_class); ?> a.button', function(e) {
+                var bannerSel = '.<?php echo esc_js($this->banner_css_class); ?>';
+
+                $(document).on('click', bannerSel + ' a.button,' + bannerSel + ' a.wbtf-review-link', function(e) {
                     e.preventDefault();
                     var elm = $(this);
                     var btn_type = elm.attr('data-type');
+                    var $banner = elm.closest(bannerSel);
                     if (btn_type == 'review') {
                         window.open('<?php echo esc_url($this->review_url); ?>');
                     }
-                    elm.parents('.<?php echo esc_js($this->banner_css_class); ?>').hide();
+                    $banner.hide();
 
                     data_obj['wt_review_action_type'] = btn_type;
+                    data_obj['wt_review_item_type'] = $banner.attr('data-wt-review-item-type') || '';
                     $.ajax({
                         url: '<?php echo esc_url($ajax_url); ?>',
                         data: data_obj,
                         type: 'POST'
                     });
 
-                }).on('click', '.<?php echo esc_js($this->banner_css_class); ?> .notice-dismiss', function(e) {
+                }).on('click', bannerSel + ' .notice-dismiss', function(e) {
                     e.preventDefault();
+                    var $banner = $(this).closest(bannerSel);
                     data_obj['wt_review_action_type'] = 'closed';
+                    data_obj['wt_review_item_type'] = $banner.attr('data-wt-review-item-type') || '';
                     $.ajax({
                         url: '<?php echo esc_url($ajax_url); ?>',
                         data: data_obj,
@@ -392,45 +988,62 @@ class Order_Import_Export_Review_Request
      */
     public function check_condition()
     { 
-        global $wt_iew_review_banner_shown; 
-        if (true === $wt_iew_review_banner_shown) {
+        global $wt_iew_review_banner_shown;
+        if ( isset( $wt_iew_review_banner_shown ) && true === $wt_iew_review_banner_shown ) {
             return false;
         } 
 
-        // Collect all banner states
+        // Collect banner states; 3/4 = closed for that family — try >5 jobs for remaining plugins only.
         $new_start_date = get_option($this->last_dismissal_option, 0);
         $dismissal_count = get_option($this->dismissal_count_option, 0);
         $latest_start_date = 0;
+        $eligible_prefixes = array();
+        $saw_closed_plugin = false;
+
         foreach ($this->plugins_array as $plugin) {
             $plugin_prefix = $plugin['prefix'];
-            $banner_state = absint(get_option($plugin_prefix . "_review_request", 0));
-            
-            // Exit early if banner state indicates we shouldn't show
-            if (!in_array($banner_state, array(0, 1, 2, 5))) {
-                return false;
-            }
-            
-            if(5===$banner_state && $new_start_date === 0){
-                
-                $plugin_start_date = absint(get_option($plugin['prefix'] . '_start_date', 0));
-                // Update latest_start_date if current plugin's start date is more recent
-                if ($plugin_start_date > $latest_start_date) {
-                    $latest_start_date = $plugin_start_date;
+            $banner_state = absint(get_option($plugin_prefix . '_review_request', 0));
+
+            if (in_array($banner_state, array(0, 1, 2, 5), true)) {
+                $eligible_prefixes[] = $plugin_prefix;
+
+                if (5 === $banner_state && 0 === (int) $new_start_date) {
+                    $plugin_start_date = absint(get_option($plugin['prefix'] . '_start_date', 0));
+                    if ($plugin_start_date > $latest_start_date) {
+                        $latest_start_date = $plugin_start_date;
+                    }
+                    $dismissal_count = 1;
+                    update_option($this->dismissal_count_option, $dismissal_count);
                 }
-                $dismissal_count = 1;
-                update_option($this->dismissal_count_option, $dismissal_count);
+            } elseif (in_array($banner_state, array(3, 4), true)) {
+                $saw_closed_plugin = true;
+                continue;
+            } else {
+                return false;
             }
         }
 
-        if($latest_start_date === 0){ // New user.
+        if (0 === (int) $latest_start_date) {
             $latest_start_date = $new_start_date;
+        }
+
+        /*
+         * If any family is fully closed (3/4), run rotation/cooldown before the global "remind later"
+         * counters. Otherwise a prior wt_iew_basic_dismiss_count from "Later" can re-show the banner
+         * even though {prefix}_review_request was saved as closed on dismiss.
+         */
+        if ($saw_closed_plugin) {
+            return $this->is_review_prompt_allowed_by_job_count_after_close_cooldown(
+                array_values(array_unique($eligible_prefixes))
+            );
         }
 
         // Handle "remind later" state if any plugin has it
         if ( $dismissal_count > 0 && $dismissal_count < 3 ) { 
-           // dismissed condition
-           return $this->handle_dissmissed($dismissal_count, $latest_start_date);
-        }            
+            // dismissed condition
+            return $this->handle_dissmissed($dismissal_count, $latest_start_date);
+         }            
+ 
 
         // Check never dismissed condition
         return $this->handle_never_dissmissed();
@@ -494,8 +1107,8 @@ class Order_Import_Export_Review_Request
                 LIMIT 1"
             );
             // phpcs:enable
-            
-            if ($last_job && $last_job->status == 1) {
+
+            if ( $last_job &&  1 === (int) $last_job->status ) {
                 $this->current_post_type = $last_job->item_type;
                 $wt_iew_review_banner_shown = true;
                 return true;
@@ -531,6 +1144,107 @@ class Order_Import_Export_Review_Request
         return false;
     }
 
+    /**
+     * Minimum time after the most recent banner close (state 3/4) before we may use the job-count rule (~2 months).
+     *
+     * @since 2.7.3
+     *
+     * @return int Seconds.
+     */
+    private function get_review_banner_close_cooldown_seconds()
+    {
+        return 60 * DAY_IN_SECONDS;
+    }
+
+    /**
+     * True when the newest `{prefix}_review_request_closed_at` among plugins in state 3 or 4 exists
+     * and is at least get_review_banner_close_cooldown_seconds() ago (so another plugin may be prompted).
+     *
+     * @since 2.7.3
+     *
+     * @return bool
+     */
+    private function is_last_review_close_old_enough_for_rotation()
+    {
+        $latest_close = 0;
+        foreach ($this->plugins_array as $plugin) {
+            if (empty($plugin['prefix'])) {
+                continue;
+            }
+            $state = absint(get_option($plugin['prefix'] . '_review_request', 0));
+            if (!in_array($state, array(3, 4), true)) {
+                continue;
+            }
+            $closed_at = absint(get_option($plugin['prefix'] . '_review_request_closed_at', 0));
+            if ($closed_at > $latest_close) {
+                $latest_close = $closed_at;
+            }
+        }
+        if (0 === $latest_close) {
+            return false;
+        }
+
+        return (time() - $latest_close) >= $this->get_review_banner_close_cooldown_seconds();
+    }
+
+    /**
+     * After at least one IE plugin banner was closed: allow prompting another family only if the
+     * most recent close was at least ~2 months ago AND one of the given prefixes has more than five
+     * successful jobs (status=1) across its post_types in wt_iew_action_history.
+     *
+     * @since 2.7.3
+     *
+     * @param string[] $eligible_prefixes Prefixes still on banner state 0/1/2/5 to consider.
+     * @return bool
+     */
+    private function is_review_prompt_allowed_by_job_count_after_close_cooldown( $eligible_prefixes )
+    {
+        global $wpdb, $wt_iew_review_banner_shown;
+
+        if (!$this->is_last_review_close_old_enough_for_rotation()) {
+            return false;
+        }
+
+        if (empty($eligible_prefixes) || !is_array($eligible_prefixes)) {
+            return false;
+        }
+
+        $eligible = array_values(array_unique(array_filter(array_map('strval', $eligible_prefixes))));
+        if (array() === $eligible) {
+            return false;
+        }
+
+        foreach ($this->plugins_array as $plugin) {
+            $prefix = isset($plugin['prefix']) ? $plugin['prefix'] : '';
+            if ('' === $prefix || !in_array($prefix, $eligible, true)) {
+                continue;
+            }
+            if (empty($plugin['post_types']) || !is_array($plugin['post_types'])) {
+                continue;
+            }
+
+            $types = array_values(array_filter(array_map('strval', $plugin['post_types'])));
+            if (array() === $types) {
+                continue;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($types), '%s'));
+            // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- IN list placeholders match $types; merged args passed to prepare().
+            $sql = "SELECT COUNT(*) FROM {$wpdb->prefix}wt_iew_action_history WHERE status = %d AND item_type IN ({$placeholders})";
+            $args = array_merge(array(1), $types);
+            $count = (int) $wpdb->get_var($wpdb->prepare($sql, $args));
+            // phpcs:enable
+
+            if ($count > 5) {
+                $this->current_post_type = $types[0];
+                $wt_iew_review_banner_shown = true;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function get_jobs_since_dismissal($last_dismissal) {
         
         global $wpdb;
@@ -560,6 +1274,11 @@ class Order_Import_Export_Review_Request
 
     public function show_banner_cta()
     {
+        global $wt_iew_review_banner_shown;
+        if ( isset( $wt_iew_review_banner_shown ) && true === $wt_iew_review_banner_shown ) {
+            return;
+        }
+        
         // Check if the WooCommerce Order Import Export plugin is active
         if (is_plugin_active('order-import-export-for-woocommerce/order-import-export-for-woocommerce.php')) {
     
@@ -719,7 +1438,7 @@ class Order_Import_Export_Review_Request
         }
 
         // Check if banner is hidden via database option (close button) or review banner is shown
-        if ( true === $wt_iew_review_banner_shown || true === (bool) get_option($banner_data['option_name'], false)) {
+        if ( ( isset( $wt_iew_review_banner_shown ) && true === $wt_iew_review_banner_shown ) || true === (bool) get_option($banner_data['option_name'], false)) {
             return;
         }
 
