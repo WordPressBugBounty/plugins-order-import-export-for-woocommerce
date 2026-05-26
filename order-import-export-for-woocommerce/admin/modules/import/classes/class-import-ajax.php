@@ -119,6 +119,31 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 	}
 
 	/**
+	 * Move a staged local file into the import directory (rename first, copy+delete fallback).
+	 *
+	 * @param string $from Source path (e.g. from wp_handle_upload).
+	 * @param string $to   Destination path under webtoffee_import.
+	 * @return bool
+	 */
+	private function move_staged_import_file( $from, $to ) {
+		$from = wp_normalize_path( $from );
+		$to   = wp_normalize_path( $to );
+		if ( $from === $to ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Generic.PHP.ForbiddenFunctions.Found -- Intentional rename for same-volume moves.
+		if ( @rename( $from, $to ) ) {
+			return true;
+		}
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Generic.PHP.ForbiddenFunctions.Found, WordPress.WP.AlternativeFunctions.file_system_operations_copy -- Cross-volume fallback; WP_Filesystem unavailable in this path.
+		if ( @copy( $from, $to ) ) {
+			wp_delete_file( $from );
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	*	Upload import file (Drag and drop  upload)
 	*
 	*/
@@ -147,25 +172,58 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 					$file_name = 'local-file-' . time() . '-' . str_replace( '_', '-', $uploaded_file_name );
 					$file_path = $this->import_obj->get_file_path( $file_name );
 
-          // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Generic.PHP.ForbiddenFunctions.Found
-					if(isset($_FILES['wt_iew_import_file']['tmp_name']) && @move_uploaded_file(sanitize_text_field(wp_unslash($_FILES['wt_iew_import_file']['tmp_name'])), $file_path))
-					{
-						$out['msg']='';
-						$out['status']=1;
-						$out['url']=$this->import_obj->get_file_url($file_name);
+					if ( ! $file_path ) {
+						$out['msg'] = __( 'Unable to create the import folder. Please check write permission of your `wp-content` folder.', 'order-import-export-for-woocommerce' );
+					} else {
+						$tmp_name   = isset( $_FILES['wt_iew_import_file']['tmp_name'] ) ? wp_unslash( $_FILES['wt_iew_import_file']['tmp_name'] ) : '';
+						$upload_ok  = false;
 
-						/**
-						*	Check old file exists, and delete it
-						*/
-						$file_url=(isset($_POST['file_url']) ? esc_url_raw(wp_unslash($_POST['file_url'])) : '');
-						$map_profile_id=(isset($_POST['map_profile_id']) ? sanitize_text_field(wp_unslash($_POST['map_profile_id'])) : '');
-						
-						if ( '' !== $file_url && ! $map_profile_id ) {
-							$this->import_obj->delete_import_file( $file_url );
+						// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, Generic.PHP.ForbiddenFunctions.Found -- Suppressed to avoid PHP warnings on upload failure; is_uploaded_file() guards against path traversal.
+						if ( $tmp_name && is_uploaded_file( $tmp_name ) && @move_uploaded_file( $tmp_name, $file_path ) ) {
+							$upload_ok = true;
+						} else {
+							if ( ! function_exists( 'wp_handle_upload' ) ) {
+								require_once ABSPATH . 'wp-admin/includes/file.php';
+							}
+
+							$upload = wp_handle_upload(
+								$_FILES['wt_iew_import_file'],
+								array(
+									'test_form' => false,
+									'test_type' => false,
+									'mimes'     => $this->import_obj->allowed_import_file_type_mime,
+								)
+							);
+
+							if ( isset( $upload['error'] ) ) {
+								$out['msg'] = $upload['error'];
+							} elseif ( ! empty( $upload['file'] ) && $this->move_staged_import_file( $upload['file'], $file_path ) ) {
+								$upload_ok = true;
+							} else {
+								if ( ! empty( $upload['file'] ) && file_exists( $upload['file'] ) ) {
+									wp_delete_file( $upload['file'] );
+								}
+								$out['msg'] = __( 'Unable to upload file. Please check write permission of your `wp-content` folder.', 'order-import-export-for-woocommerce' );
+							}
 						}
-					}else
-					{
-						$out['msg']=__('Unable to upload file. Please check write permission of your `wp-content` folder.', 'order-import-export-for-woocommerce');
+
+						if ( $upload_ok ) {
+							$out['msg']    = '';
+							$out['status'] = 1;
+							$out['url']    = $this->import_obj->get_file_url( $file_name );
+
+							/**
+							*	Check old file exists, and delete it
+							*/
+							$file_url         = ( isset( $_POST['file_url'] ) ? esc_url_raw( wp_unslash( $_POST['file_url'] ) ) : '' );
+							$map_profile_id   = ( isset( $_POST['map_profile_id'] ) ? sanitize_text_field( wp_unslash( $_POST['map_profile_id'] ) ) : '' );
+
+							if ( '' !== $file_url && ! $map_profile_id ) {
+								$this->import_obj->delete_import_file( $file_url );
+							}
+						} elseif ( ! isset( $out['msg'] ) || '' === $out['msg'] ) {
+							$out['msg'] = __( 'Unable to upload file. Please check write permission of your `wp-content` folder.', 'order-import-export-for-woocommerce' );
+						}
 					}
 				}else
 				{

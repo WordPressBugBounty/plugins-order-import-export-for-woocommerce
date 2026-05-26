@@ -740,36 +740,50 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 	public static function get_file_path($file_name="")
 	{
 		global $wp_filesystem;
-		
-		if (!function_exists('WP_Filesystem')) {
-			require_once(ABSPATH . 'wp-admin/includes/file.php');
+
+		if ( ! function_exists( 'WP_Filesystem' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
-		
+
 		WP_Filesystem();
-		
-		if(!$wp_filesystem->is_dir(self::$import_dir))
-		{
-			if(!$wp_filesystem->mkdir(self::$import_dir, 0700))
-			{
-				return false;
-			}else
-			{
-				$files_to_create = array(
-					'.htaccess' => 'deny from all',
-					'index.php' => '<?php // Silence is golden'
-				);
-				
-				foreach($files_to_create as $file => $file_content)
-				{
-					$file_path = self::$import_dir . '/' . $file;
-					if(!$wp_filesystem->exists($file_path))
-					{
-						$wp_filesystem->put_contents($file_path, $file_content, 0700);
-					}
-				}
+
+		$dir = self::$import_dir;
+
+		if ( ! is_dir( $dir ) ) {
+			if ( $wp_filesystem && ! $wp_filesystem->is_dir( $dir ) ) {
+				$wp_filesystem->mkdir( $dir, 0700 );
+			}
+			if ( ! is_dir( $dir ) ) {
+				wp_mkdir_p( $dir );
 			}
 		}
-		return self::$import_dir.'/'.$file_name;
+
+		if ( ! is_dir( $dir ) ) {
+			return false;
+		}
+
+		$files_to_create = array(
+			'.htaccess' => 'deny from all',
+			'index.php'   => '<?php // Silence is golden',
+		);
+
+		foreach ( $files_to_create as $file => $file_content ) {
+			$sec_path = $dir . '/' . $file;
+			if ( file_exists( $sec_path ) ) {
+				continue;
+			}
+			$written = false;
+			if ( $wp_filesystem && ! $wp_filesystem->exists( $sec_path ) ) {
+				$put = $wp_filesystem->put_contents( $sec_path, $file_content, 0700 );
+				$written = ( false !== $put && (int) $put > 0 );
+			}
+			if ( ! $written ) {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Fallback when WP_Filesystem cannot write.
+				@file_put_contents( $sec_path, $file_content );
+			}
+		}
+
+		return $dir . '/' . $file_name;
 	}
 
 	/**

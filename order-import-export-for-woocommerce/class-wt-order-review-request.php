@@ -1510,13 +1510,31 @@ class Order_Import_Export_Review_Request
     public function dismiss_wc_pages_banner_ajax()
     {
         check_ajax_referer('wt_iew_wc_pages_banner', 'nonce');
-        
-        if (isset($_POST['option_name'])) {
-            $option_name = sanitize_text_field(wp_unslash($_POST['option_name']));
-            // Save to database - permanently hide the banner
-            update_option($option_name, true);
+
+        if ( ! isset( $_POST['option_name'] ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Missing option name.', 'order-import-export-for-woocommerce' ) ),
+                400
+            );
         }
-        
+
+        $option_name = sanitize_text_field( wp_unslash( $_POST['option_name'] ) );
+
+        // Allowlist: only the banner-dismiss options the plugin itself defines (see show_wc_pages_banner()).
+        $allowed_options = array(
+            'wt_iew_hide_did_you_know_wc_orders_banner_2026',
+            'wt_iew_hide_did_you_know_wc_products_banner_2026',
+            'wt_iew_hide_did_you_know_wc_customers_banner_2026',
+        );
+
+        if ( ! in_array( $option_name, $allowed_options, true ) ) {
+            wp_send_json_error(
+                array( 'message' => __( 'Invalid option.', 'order-import-export-for-woocommerce' ) ),
+                400
+            );
+        }
+
+        update_option( $option_name, true );
         wp_send_json_success();
     }
     
