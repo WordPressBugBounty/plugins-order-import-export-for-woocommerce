@@ -356,7 +356,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
     
     
     public static function wt_allowed_screens(){
-        $screens=array('wt_import_export_for_woo_basic','wt_import_export_for_woo_basic_export','wt_import_export_for_woo_basic_import','wt_import_export_for_woo_basic_history','wt_import_export_for_woo_basic_history_log');
+        $screens=array('wt_import_export_for_woo_basic','wt_import_export_for_woo_basic_export','wt_import_export_for_woo_basic_import','wt_import_export_for_woo_basic_history','wt_import_export_for_woo_basic_history_log','wt_iew_scheduled_job');
         return apply_filters('wt_iew_allowed_screens_basic', $screens);
 
     }
@@ -399,6 +399,79 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
             'table_name' => $table_name,
         );
     }
+
+	/**
+	 * Format a WC_DateTime as 'Y-m-d H:i:s O' in the site's local timezone.
+	 *
+	 * Clones the object before calling setTimezone() to avoid mutating the
+	 * original WC_DateTime (which may be used elsewhere in the export loop).
+	 *
+	 * @param \WC_DateTime|null $wc_datetime
+	 * @return string Formatted date string, or empty string if not a WC_DateTime.
+	 */
+	public static function format_date_with_offset( $wc_datetime ) {
+		if ( ! $wc_datetime instanceof \WC_DateTime ) {
+			return '';
+		}
+		$local = clone $wc_datetime;
+		$local->setTimezone( wp_timezone() );
+		return $local->format( 'Y-m-d H:i:s O' );
+	}
+
+	/**
+	 * Whether a CSV date string carries an explicit timezone (offset or Z).
+	 *
+	 * wc_string_to_datetime() only handles ISO-8601 with a T separator and a
+	 * colonated offset (+05:30). Our export format uses a space separator and
+	 * basic offset (+0530), which must be parsed via native DateTime instead.
+	 *
+	 * @param string $value Raw CSV date value.
+	 * @return bool
+	 */
+	public static function csv_date_has_timezone( $value ) {
+		return (bool) preg_match( '/\s[+-]\d{2}:?\d{2}$|Z$/', $value )
+			|| (bool) preg_match( '/T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:?\d{2})$/', $value );
+	}
+
+	/**
+	 * Parse a CSV date field to import-site local time (Y-m-d H:i:s).
+	 *
+	 * Dual-mode: offset-bearing strings honor the embedded timezone; bare strings
+	 * are treated as import-site local time (legacy CSV backward compatibility).
+	 *
+	 * @param string $value Raw CSV date value.
+	 * @return string Local datetime string.
+	 * @throws \Exception When the value is non-empty but unparseable.
+	 */
+	public static function parse_csv_date_to_local_string( $value ) {
+		$value = trim( (string) $value );
+
+		if ( '' === $value ) {
+			return wp_date( 'Y-m-d H:i:s' );
+		}
+
+		if ( false !== strpos( $value, '/' ) ) {
+			$value = str_replace( '/', '-', $value );
+		}
+
+		if ( self::csv_date_has_timezone( $value ) ) {
+			try {
+				$dt = new \DateTime( $value );
+			} catch ( \Exception $e ) {
+				throw new \Exception( 'Invalid date format.' );
+			}
+			$dt->setTimezone( wp_timezone() );
+			return $dt->format( 'Y-m-d H:i:s' );
+		}
+
+		try {
+			$dt = wc_string_to_datetime( $value );
+		} catch ( \Exception $e ) {
+			throw new \Exception( 'Invalid date format.' );
+		}
+		return $dt->format( 'Y-m-d H:i:s' );
+	}
+
     /**
 	 * @param int $charval
 	 *

@@ -172,7 +172,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			'field_name'=>'default_export_batch',
 			'help_text'=>__('Provide the default count for the records to be exported in a batch.', 'order-import-export-for-woocommerce'),
 			'validation_rule'=>array('type'=>'absint'),
-			'attr' => array('min' => 1, 'max' => 200),
+			'attr' => array('min' => 1, 'max' => 200, 'step' => 1),
 		);
 		if(is_plugin_active('product-import-export-for-woo/product-import-export-for-woo.php')){
             $fields['enable_chatgpt'] = array(
@@ -378,7 +378,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			}
 		}
 
-		$delimiter_default = isset($advanced_form_data['wt_iew_delimiter']) ? $advanced_form_data['wt_iew_delimiter'] : ",";
+		$delimiter_values  = Wt_Iew_IE_Basic_Helper::_get_delimiter_form_values( $advanced_form_data );
+		$delimiter_default = $delimiter_values['delimiter'];
+		$delimiter_preset  = $delimiter_values['preset'];
 		$advanced_screen_fields=array(
 			'file_name'=>array(
 				'label'=>__("Export file name", 'order-import-export-for-woocommerce'),
@@ -391,18 +393,19 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			),
 			'batch_count'=>array(
 				'label'=>__("Export in batches of", 'order-import-export-for-woocommerce'),
-				'type'=>'text',
+				'type'=>'number',
                                 'merge_right'=>true,
 				'value'=>$this->default_batch_count,
 				'field_name'=>'batch_count',
 				// translators: %d: number of records
 				'help_text'=>sprintf(__('The number of records that the server will process for every iteration within the configured timeout interval. If the export fails due to timeout you can lower this number accordingly and try again. Defaulted to %d records.', 'order-import-export-for-woocommerce'), 30),
 				'validation_rule'=>array('type'=>'absint'),
+				'attr' => array('min' => 1, 'step' => 1),
 			),
 			'delimiter'=>array(
 				'label'=>__( 'Delimiter' , 'order-import-export-for-woocommerce'),
 				'type'=>'select',
-				'value'=>",",
+				'value'=>$delimiter_preset,
 				'css_class'=>"wt_iew_delimiter_preset",
 				'tr_id'=>'delimiter_tr',
 				'field_name'=>'delimiter_preset',

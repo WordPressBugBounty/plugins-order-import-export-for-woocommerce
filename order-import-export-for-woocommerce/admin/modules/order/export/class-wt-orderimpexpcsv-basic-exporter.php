@@ -432,7 +432,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_amount(),
                     'reason:' . $refunded_items->get_reason(),
-                    'date:' . wp_date('Y-m-d H:i:s', strtotime($refunded_items->get_date_created())),
+                    'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $refunded_items->get_date_created() ),
                 ));
             }
         }
@@ -441,8 +441,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
             $order_data = array(
                 'order_id' => $order->get_id(),
                 'order_number' => $order->get_order_number(),
-                'order_date' => wp_date('Y-m-d H:i:s', strtotime(get_post($order->get_id())->post_date)),
-                'paid_date' => $order->get_date_paid(),
+                'order_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $order->get_date_created() ),
+                'paid_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $order->get_date_paid() ),
                 'status' => $order->get_status(),
                 'shipping_total' => $order->get_total_shipping(),
                 'shipping_tax_total' => wc_format_decimal($order->get_shipping_tax(), 2),
@@ -642,7 +642,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
         foreach ($notes as $note) {
             $order_notes[] = implode('|', array(
                 'content:' . str_replace(array("\r", "\n"), ' ', $note->content),
-                'date:' . $note->date_created->date('Y-m-d H:i:s'),
+                'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $note->date_created ),
                 'customer:' . $note->customer_note,
                 'added_by:' . $note->added_by
             ));

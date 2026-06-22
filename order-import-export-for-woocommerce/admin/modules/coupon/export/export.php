@@ -169,6 +169,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Export {
 
             $return['total'] = $total_records;
             $return['data'] = $data_array;
+            if ( 0 == $batch_offset && 0 == $total_records ) {
+                $return['no_post'] = esc_html__( 'Nothing to export under the selected criteria.', 'order-import-export-for-woocommerce' );
+            }
 
             return $return;
         }        

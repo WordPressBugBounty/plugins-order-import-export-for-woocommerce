@@ -709,6 +709,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 		{
 			/* setting a default import method */
 			$this->import_method=($this->import_method=='' ? $this->import_obj->default_import_method : $this->import_method);
+			$this->get_mapping_templates();
+			$this->import_method = Wt_Iew_IE_Basic_Helper::_resolve_method_with_templates( $this->import_method, $this->mapping_templates );
 			$this->import_obj->import_method=$this->import_method;
 			$this->steps=$this->import_obj->get_steps();
 
@@ -732,7 +734,6 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 			}
 
 			/* meta field list for quick import */
-			$this->get_mapping_templates();
 			$link_array = array(
 				'order' => array(
 					'link'  => 'https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Order_Import_Export',
@@ -1047,6 +1048,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 		$step_keys=$this->step_keys;
 		$current_index=$this->current_step_index;
 		$last_page=$this->last_page;
+		$legacy_arrow_style = version_compare( get_bloginfo( 'version' ), '7.0', '>=' ) ? '' : ' style="line-height:27px;"';
 		if($current_index!==false) /* step exists */
 		{
 			if($current_index>0) //add back button
@@ -1055,7 +1057,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 					'type'=>'button',
 					'action_type'=>'step',
 					'key'=>$step_keys[$current_index-1],
-					'text'=>'<span class="dashicons dashicons-arrow-left-alt2" style="line-height:27px;"></span> '.__('Back', 'order-import-export-for-woocommerce'),
+					'text'=>'<span class="dashicons dashicons-arrow-left-alt2"'.$legacy_arrow_style.'></span> '.__('Back', 'order-import-export-for-woocommerce'),
 				);
 			}
 			
@@ -1068,7 +1070,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 					'type'=>'button',
 					'action_type'=>'step',
 					'key'=>$next_key,
-					'text'=>__('Step', 'order-import-export-for-woocommerce').' '.$next_number.': '.$next_title.' <span class="dashicons dashicons-arrow-right-alt2" style="line-height:27px;"></span>',
+					'text'=>__('Step', 'order-import-export-for-woocommerce').' '.$next_number.': '.$next_title.' <span class="dashicons dashicons-arrow-right-alt2"'.$legacy_arrow_style.'></span>',
 				);
 
 				if($this->import_method=='quick' || $this->import_method=='template') //Quick Or Template method

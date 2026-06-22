@@ -4,7 +4,7 @@ Tags: woocommerce export orders, woocommerce import orders, advanced order expor
 Requires at least: 3.0
 Tested up to: 7.0
 Requires PHP: 5.6
-Stable tag: 2.7.4
+Stable tag: 2.7.5
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -31,7 +31,7 @@ The following are functionalities offered by the basic version of the WooCommerc
  &#128312; **YITH Compatibility:** Compatible with YITH WooCommerce Order Tracking plugin.
  &#128312; **Export Filters:** Supports various export orders filters (order status, product, coupon, customer, date range) for order export to CSV.
  &#9989; Tested OK with WordPress 7.0
- &#9989; Tested OK with WooCommerce 10.7.0
+ &#9989; Tested OK with WooCommerce 10.8.1
  &#9989; Tested OK with PHP 8.3
 
 = Advanced Features for Seamless CSV Export and Import =
@@ -123,7 +123,6 @@ See our [Privacy Policy](https://www.webtoffee.com/privacy-policy/) and [Terms &
 ###RELATED PLUGINS FROM WEBTOFFEE###
 
 &#128312; <a rel="nofollow" href="https://wordpress.org/plugins/wt-woocommerce-sequential-order-numbers/">Sequential Order Number for WooCommerce</a>: Easily manage orders with all the order numbers sorted sequentially.
-&#128312; <a rel="nofollow" href="https://wordpress.org/plugins/product-import-export-for-woo/">Product Import Export for WooCommerce</a>: This free plugin will help you import and export products from your store using a CSV file.
 &#128312; <a rel="nofollow" href="https://wordpress.org/plugins/users-customers-import-export-for-wp-woocommerce/">Import Export WordPress Users</a>: Import and export the users in your WordPress store using a CSV file with the help of this plugin.
 &#128312; <a rel="nofollow" href="https://wordpress.org/plugins/wp-migration-duplicator/">WordPress Backup & Migration</a>: Quickly migrate and backup entire WordPress site or selected files from one location to another. Backup to FTP, Google Drive, Amazon S3, or local storage and easily restore them back.
 &#128312; <a href="https://wordpress.org/plugins/webtoffee-product-feed/">WebToffee WooCommerce Product Feed & Sync Manager</a>: Generate WooCommerce product feed for Google, Facebook and Instagram Shops and sync WooCommerce products with Facebook catalog.
@@ -222,6 +221,10 @@ Yes.
 
 == Changelog ==
 
+= 2.7.5 2026-06-22 =
+* [Fix] - Preserved timezone offsets in order dates during CSV import and export.
+* [Compatibility] – Tested OK with WooCommerce 10.8.1
+
 = 2.7.4 2026-05-26 =
 * [Fix] - Fixed import file upload failure on servers where WordPress filesystem detection fails.
 * [Compatibility] - Tested OK with WordPress 7.0
@@ -230,6 +233,6 @@ Yes.
 
 == Upgrade Notice ==
 
-= 2.7.4 =
-* [Fix] - Fixed import file upload failure on servers where WordPress filesystem detection fails.
-* [Compatibility] - Tested OK with WordPress 7.0
+= 2.7.5 =
+* [Fix] - Preserved timezone offsets in order dates during CSV import and export.
+* [Compatibility] – Tested OK with WooCommerce 10.8.1

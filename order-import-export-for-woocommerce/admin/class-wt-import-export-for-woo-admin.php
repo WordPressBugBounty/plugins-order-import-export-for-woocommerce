@@ -122,6 +122,11 @@ if (!class_exists('Wt_Import_Export_For_Woo_Order_Admin_Basic')) {
 					wp_enqueue_script($this->plugin_name . '_wbftHeaderScripts', plugin_dir_url(__FILE__) . 'js/wbftHeaderScripts.js', array('jquery'), $this->version, false);
 				}
 
+				wp_localize_script($this->plugin_name . '_wbftHeaderScripts', 'wt_oiew_header_params', array(
+					'ajax_url' => esc_url( admin_url( 'admin-ajax.php' ) ),
+					'nonce'    => wp_create_nonce(WT_IEW_PLUGIN_ID_BASIC),
+				));
+
 				// Enqueue design system extensions script
 				// This extends the design system library functionality for multi-plugin compatibility
 				// without modifying the core design system library

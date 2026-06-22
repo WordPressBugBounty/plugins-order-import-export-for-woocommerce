@@ -246,21 +246,18 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     continue;
                 }
                 if ( 'date_created' == $column || 'post_date' == $column || 'order_date' == $column) {
-                    $date = $this->wt_parse_date_field($value,$column);
-                    $this->item_data['date_created'] = wp_date('Y-m-d H:i:s', $date);
+                    $this->item_data['date_created'] = $this->wt_parse_date_field( $value, $column );
                     continue;
                 }  
                 if(('_paid_date' == $column || 'paid_date' == $column) && $value != ''){
-
-                    $date = $this->wt_parse_date_field($value,$column);
-                    $this->item_data['date_paid'] = wp_date('Y-m-d H:i:s', $date);
+                    $this->item_data['date_paid'] = $this->wt_parse_date_field( $value, $column );
                     continue;
                 }
 
                 if ('post_modified' == $column || 'date_modified' == $column || 'date_completed' == $column || '_completed_date' == $column ) {
-                    $date = $this->wt_parse_date_field($value,$column);
-                    $this->item_data['date_modified'] = wp_date('Y-m-d H:i:s', $date);
-                    $this->item_data['date_completed'] = wp_date('Y-m-d H:i:s', $date);
+                    $parsed_date = $this->wt_parse_date_field( $value, $column );
+                    $this->item_data['date_modified'] = $parsed_date;
+                    $this->item_data['date_completed'] = $parsed_date;
                     continue;
                 }
 
@@ -908,19 +905,16 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         
     }
     
-    public function wt_parse_date_field($value, $column) { 
-        
-        $date = $value;
-        
-        if($value == ''){
-            $date = wp_date('Y-m-d h:i:s');
+    public function wt_parse_date_field( $value, $column ) {
+        $value = trim( (string) $value );
+
+        try {
+            return Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::parse_csv_date_to_local_string( $value );
+        } catch ( \Exception $e ) {
+            throw new \Exception(
+                esc_html( sprintf( 'Skipped. Invalid date format %s in column %s.', $value, $column ) )
+            );
         }
-                
-        if(false === ( $date = strtotime($date) )) {
-            // invalid date format
-            throw new Exception(esc_html(sprintf('Skipped. Invalid date format %s in column %s.', $value,$column) )); 
-        }
-        return $date;        
     }
     
     public function wt_parse_customer_id_field($value,$column,$data) {  
@@ -2366,6 +2360,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     $reason = substr($reason, strpos($reason, ":") + 1);
                     $date = array_shift($single_refund);
                     $date = substr($date, strpos($date, ":") + 1);
+                    if ( ! empty( $date ) ) {
+                        try {
+                            $date = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::parse_csv_date_to_local_string( $date );
+                        } catch ( \Exception $e ) {
+                            // Keep raw $date; WC set_date_created() will attempt to parse via wc_string_to_timestamp().
+                        }
+                    }
 
                     $args = array(
                         'amount' => wc_format_decimal($amount, 2),
@@ -2415,7 +2416,15 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     } else {
                         $comment_id = $order->add_order_note($con,0,$added_by_user);
                     }
-                    wp_update_comment(array('comment_ID' => $comment_id,'comment_date' => $date));
+                    $update_args = array( 'comment_ID' => $comment_id );
+                    try {
+                        $local_date                      = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::parse_csv_date_to_local_string( $date );
+                        $update_args['comment_date']     = $local_date;
+                        $update_args['comment_date_gmt'] = get_gmt_from_date( $local_date );
+                    } catch ( \Exception $e ) {
+                        $update_args['comment_date'] = $date;
+                    }
+                    wp_update_comment( $update_args );
                 }
             }
 

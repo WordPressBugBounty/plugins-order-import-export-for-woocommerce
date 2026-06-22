@@ -1,6 +1,10 @@
 
 == Changelog ==
 
+= 2.7.5 2026-06-22 =
+* [Fix] - Preserved timezone offsets in order dates during CSV import and export.
+* [Compatibility] – Tested OK with WooCommerce 10.8.1
+
 = 2.7.4 2026-05-26 =
 * [Fix] - Fixed import file upload failure on servers where WordPress filesystem detection fails.
 * [Compatibility] - Tested OK with WordPress 7.0

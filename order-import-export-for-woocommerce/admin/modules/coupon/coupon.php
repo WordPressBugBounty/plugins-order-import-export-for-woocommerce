@@ -182,6 +182,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon {
             'body_data' => $data_row['data'],
             'total' => $data_row['total'],
         );
+        if ( isset( $data_row['no_post'] ) ) {
+            $export_data['no_post'] = $data_row['no_post'];
+        }
         
         return $export_data;
     }

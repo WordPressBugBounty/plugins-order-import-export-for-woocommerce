@@ -377,6 +377,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export_Ajax
 		{
 			/* setting a default export method */
 			$this->export_method=($this->export_method=='' ? $this->export_obj->default_export_method : $this->export_method);
+			$this->get_mapping_templates();
+			$this->export_method = Wt_Iew_IE_Basic_Helper::_resolve_method_with_templates( $this->export_method, $this->mapping_templates );
 			$this->export_obj->export_method=$this->export_method;
 			$this->steps=$this->export_obj->get_steps();
 
@@ -404,9 +406,6 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export_Ajax
 
 			/* meta field list for quick export */
 			$this->get_mapping_enabled_fields();
-
-			/* template list for template export */
-			$this->get_mapping_templates();
 
 			ob_start();		
 			$this->prepare_step_header_html();

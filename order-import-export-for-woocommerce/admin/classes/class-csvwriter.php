@@ -115,8 +115,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Csvwriter
 	public function format_data( $data )
 	{
 		if ( ! is_scalar( $data ) ) {
-			if ( is_a( $data, 'WC_Datetime' ) ) {
-				$data = $data->date( 'Y-m-d G:i:s' );
+			if ( is_a( $data, 'WC_DateTime' ) ) {
+				$data = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $data );
 			} else {
 				$data = ''; // Not supported.
 			}

@@ -110,9 +110,9 @@
             };
 
             var faqLinks = {
-                product: 'https://wordpress.org/plugins/product-import-export-for-woo/#:~:text=Export%20for%20WooCommerce-,FAQ,-Import%20of%20attributes',
-                user: 'https://wordpress.org/plugins/users-customers-import-export-for-wp-woocommerce/#:~:text=import%20export%20log-,FAQ,-Does%20this%20plugin',
-                order: 'https://wordpress.org/plugins/order-import-export-for-woocommerce/#:~:text=Exported%20coupon%20CSV-,FAQ,-Does%20this%20plugin'
+                product: 'https://wordpress.org/plugins/product-import-export-for-woo/#faq',
+                user: 'https://wordpress.org/plugins/users-customers-import-export-for-wp-woocommerce/#faq',
+                order: 'https://wordpress.org/plugins/order-import-export-for-woocommerce/#faq'
             };
 
             var setupGuideLinks = {

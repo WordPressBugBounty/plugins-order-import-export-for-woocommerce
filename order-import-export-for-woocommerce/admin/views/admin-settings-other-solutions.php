@@ -53,7 +53,7 @@ $plugins=array(
         'title'         => __('WebToffee WooCommerce Product Feed & Sync Manager', 'order-import-export-for-woocommerce'),
         'description'   => __('Generate WooCommerce product feeds for Google Merchant Center and Facebook Business Manager. Use the Facebook catalog sync manager to sync WooCommerce products with Facebook and Instagram shops.', 'order-import-export-for-woocommerce'),
         'image_url'     => 'product-feed-sync.png',
-        'premium_url'   => 'https://www.webtoffee.com/product/product-catalog-sync-for-facebook/?utm_source=other_solution_page&utm_medium=free_plugin&utm_campaign=WooCommerce_Product_Feed',
+        'premium_url'   => 'https://www.webtoffee.com/product/woocommerce-product-feed/?utm_source=other_solution_page&utm_medium=free_plugin&utm_campaign=WooCommerce_Product_Feed',
         'basic_url'     => 'https://wordpress.org/plugins/webtoffee-product-feed/',
         'pro_plugin'    => 'webtoffee-product-feed-pro/webtoffee-product-feed-pro.php',
         'basic_plugin'  => 'webtoffee-product-feed/webtoffee-product-feed.php',
