@@ -24,6 +24,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Export {
     public $is_wc_stripe_active = false; 
 	private $wpo_wcpdf = false;
     private $exclude_line_items = false;
+    private $include_timezone_offset = false;
 
     /** Cached header/column list for the current batch (built once per batch). */
     private $cached_csv_columns = null;
@@ -210,8 +211,9 @@ $coupons = !empty($form_data['filter_form_data']['wt_iew_coupons']) ? $form_data
         $this->export_to_separate_columns = (!empty($form_data['advanced_form_data']['wt_iew_export_to_separate']) && $form_data['advanced_form_data']['wt_iew_export_to_separate'] === 'column') ? true : false;                       
         $this->export_to_separate_rows = (!empty($form_data['advanced_form_data']['wt_iew_export_to_separate']) && $form_data['advanced_form_data']['wt_iew_export_to_separate'] === 'row') ? true : false;               
 		$this->exclude_line_items = (!empty($form_data['advanced_form_data']['wt_iew_exclude_line_items']) && $form_data['advanced_form_data']['wt_iew_exclude_line_items'] == 'Yes') ? true : false;
+		$this->include_timezone_offset = (bool) Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings( 'include_timezone_offset' );
 
-        
+
         $real_offset = ($current_offset + $batch_offset);
 
         if($batch_count<=$export_limit)
@@ -573,7 +575,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_amount(),
                     'reason:' . $refunded_items->get_reason(),
-                    'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $refunded_items->get_date_created() ),
+                    'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $refunded_items->get_date_created(), $this->include_timezone_offset ),
                 ));
             }
         }
@@ -641,12 +643,12 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             );
         } else {
             $paid_date = $order->get_date_paid();
-            $order_date = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $order->get_date_created() );
+            $order_date = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $order->get_date_created(), $this->include_timezone_offset );
             $order_data = array(
                 'order_id' => $order->get_id(),
                 'order_number' => $order->get_order_number(),
                 'order_date' => $order_date,
-                'paid_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $paid_date ),
+                'paid_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $paid_date, $this->include_timezone_offset ),
                 'status' => $order->get_status(),
                 'shipping_total' => $order->get_total_shipping(),
                 'shipping_tax_total' => wc_format_decimal($order->get_shipping_tax(), 2),
@@ -697,7 +699,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 'tax_items' => implode(';', $tax_items),
                 'coupon_items' => implode(';', $coupon_items),
                 'refund_items' => implode(';', $refund_items),
-                'order_notes' => implode('||', (defined('WC_VERSION') && version_compare(WC_VERSION, '3.2', '>=')) ? self::get_order_notes_new($order) : self::get_order_notes($order)),
+                'order_notes' => implode('||', (defined('WC_VERSION') && version_compare(WC_VERSION, '3.2', '>=')) ? self::get_order_notes_new($order, $this->include_timezone_offset) : self::get_order_notes($order)),
                 'download_permissions' => $order->is_download_permitted() ? $order->is_download_permitted() : 0,                
             );
             
@@ -1095,13 +1097,13 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
         return $order_notes;
     }
 
-    public static function get_order_notes_new($order) {
+    public static function get_order_notes_new( $order, $include_offset = false ) {
         $notes = wc_get_order_notes(array('order_id' => $order->get_id(), 'order_by' => 'date_created', 'order' => 'ASC'));
         $order_notes = array();
         foreach ($notes as $note) {
             $order_notes[] = implode('|', array(
                 'content:' . str_replace(array("\r", "\n"), ' ', $note->content),
-                'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $note->date_created ),
+                'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $note->date_created, $include_offset ),
                 'customer:' . $note->customer_note,
                 'added_by:' . $note->added_by
             ));

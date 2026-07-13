@@ -17,9 +17,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Csvwriter
 	public $file_path='';
 	public $data_ar='';
 	public $csv_delimiter='';
-	public $use_bom=true;  
+	public $use_bom=true;
 	public $export_data;
 	public $file_pointer;
+	public $include_timezone_offset = false;
 	public function __construct($file_path, $offset, $csv_delimiter=",", $use_bom=true)
 	{
 		$this->csv_delimiter=$csv_delimiter;
@@ -116,7 +117,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Csvwriter
 	{
 		if ( ! is_scalar( $data ) ) {
 			if ( is_a( $data, 'WC_DateTime' ) ) {
-				$data = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_with_offset( $data );
+				$data = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $data, $this->include_timezone_offset );
 			} else {
 				$data = ''; // Not supported.
 			}

@@ -536,6 +536,23 @@ class Order_Import_Export_Review_Request
             return false;
         }
 
+        /*
+         * State 5 = "remind me later". Common pages honor wt_iew_basic_dismiss_count via
+         * check_condition() → handle_dissmissed(); type-specific pages must use the same gate
+         * or the banner reappears on Orders/Products/Users after dismissing on Dashboard.
+         */
+        if ( 5 === $banner_state ) {
+            $dismissal_count = absint( get_option( $this->dismissal_count_option, 0 ) );
+            if ( $dismissal_count >= 3 ) {
+                return false;
+            }
+            $last_dismissal = absint( get_option( $this->last_dismissal_option, 0 ) );
+            if ( 0 === $last_dismissal ) {
+                $last_dismissal = absint( get_option( $prefix . '_start_date', 0 ) );
+            }
+            return $this->handle_dissmissed( max( 1, $dismissal_count ), $last_dismissal );
+        }
+
         $installed = absint(get_option($prefix . '_start_date', 0));
         if ($installed && floor((time() - $installed) / DAY_IN_SECONDS) >= 5) {
             return true;
@@ -655,7 +672,13 @@ class Order_Import_Export_Review_Request
         $illustration = $this->get_review_banner_illustration_assets();
 
         ?>
-        <div class="<?php echo esc_attr($this->banner_css_class); ?> notice notice-info is-dismissible wbtf-review-banner wbtf-review-banner--<?php echo esc_attr($theme_slug); ?>" data-wt-review-item-type="<?php echo esc_attr( (string) $this->current_post_type ); ?>">
+        <div class="<?php echo esc_attr($this->banner_css_class); ?> notice notice-info is-dismissible wbtf-review-banner wbtf-review-banner--<?php echo esc_attr($theme_slug); ?>"
+            data-wt-review-item-type="<?php echo esc_attr( (string) $this->current_post_type ); ?>"
+            data-wt-review-action="<?php echo esc_attr( $this->ajax_action_name ); ?>"
+            data-wt-review-nonce="<?php echo esc_attr( wp_create_nonce( $this->plugin_prefix ) ); ?>"
+            data-wt-review-ajax-url="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>"
+            data-wt-review-url="<?php echo esc_url( $this->review_url ); ?>"
+            data-wt-review-plugin="<?php echo esc_attr( $this->plugin_prefix ); ?>">
             <div class="wbtf-review-banner__box">
                 <span class="wbtf-review-banner__accent" aria-hidden="true"></span>
                 <div class="wbtf-review-banner__main">
@@ -735,9 +758,6 @@ class Order_Import_Export_Review_Request
             return;
         }
         $GLOBALS['wt_iew_review_banner_footer_printed'] = true;
-
-        $ajax_url = admin_url('admin-ajax.php');
-        $nonce = wp_create_nonce($this->plugin_prefix);
     ?>
         <style type="text/css">
             /* Scope: must match $this->banner_css_class (wt_o_iew_basic + _review_request). */
@@ -859,10 +879,10 @@ class Order_Import_Export_Review_Request
                 color: #fff !important;
                 border: 1px solid var(--wbtf-review-primary, #2860F4) !important;
                 border-radius: 6px !important;
-                padding: 6px 14px !important;
+                /* padding: 6px 14px !important; */
                 font-size: 13px !important;
                 font-weight: 600 !important;
-                line-height: 1.4 !important;
+                /* line-height: 1.4 !important; */
                 box-shadow: none !important;
             }
             .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-primary.button:hover,
@@ -876,10 +896,10 @@ class Order_Import_Export_Review_Request
                 color: var(--wbtf-review-primary, #2860F4) !important;
                 border: 1px solid var(--wbtf-review-primary, #2860F4) !important;
                 border-radius: 6px !important;
-                padding: 6px 14px !important;
+                /* padding: 6px 14px !important; */
                 font-size: 13px !important;
                 font-weight: 600 !important;
-                line-height: 1.4 !important;
+                /* line-height: 1.4 !important; */
                 box-shadow: none !important;
             }
             .wt_o_iew_basic_review_request.wbtf-review-banner .wbtf-button-secondary.button:hover,
@@ -936,49 +956,68 @@ class Order_Import_Export_Review_Request
             }
         </style>
         <script type="text/javascript">
+            /**
+             * Self-contained review-banner click handler.
+             *
+             * All plugin-specific context (action, nonce, ajax_url, review_url) lives on the
+             * banner element itself as data-wt-review-* attributes. Clicks are handled by
+             * delegating on each banner element (NOT on `document`) because some sites have
+             * other click handlers on `document` that call stopImmediatePropagation() during
+             * dispatch — which silently kills delegated handlers bound at document level.
+             * Delegating on the banner itself keeps our handler out of that shared queue.
+             */
             (function($) {
                 "use strict";
 
-                var data_obj = {
-                    _wpnonce: '<?php echo esc_js($nonce); ?>',
-                    action: '<?php echo esc_js($this->ajax_action_name); ?>',
-                    wt_review_action_type: ''
-                };
-
-                var bannerSel = '.<?php echo esc_js($this->banner_css_class); ?>';
-
-                $(document).on('click', bannerSel + ' a.button,' + bannerSel + ' a.wbtf-review-link', function(e) {
-                    e.preventDefault();
-                    var elm = $(this);
-                    var btn_type = elm.attr('data-type');
-                    var $banner = elm.closest(bannerSel);
-                    if (btn_type == 'review') {
-                        window.open('<?php echo esc_url($this->review_url); ?>');
+                function submitReviewAction($banner, actionType) {
+                    var ajaxUrl = $banner.attr('data-wt-review-ajax-url');
+                    var action  = $banner.attr('data-wt-review-action');
+                    var nonce   = $banner.attr('data-wt-review-nonce');
+                    if (!ajaxUrl || !action || !nonce) {
+                        return;
                     }
-                    $banner.hide();
-
-                    data_obj['wt_review_action_type'] = btn_type;
-                    data_obj['wt_review_item_type'] = $banner.attr('data-wt-review-item-type') || '';
                     $.ajax({
-                        url: '<?php echo esc_url($ajax_url); ?>',
-                        data: data_obj,
-                        type: 'POST'
-                    });
-
-                }).on('click', bannerSel + ' .notice-dismiss', function(e) {
-                    e.preventDefault();
-                    var $banner = $(this).closest(bannerSel);
-                    data_obj['wt_review_action_type'] = 'closed';
-                    data_obj['wt_review_item_type'] = $banner.attr('data-wt-review-item-type') || '';
-                    $.ajax({
-                        url: '<?php echo esc_url($ajax_url); ?>',
-                        data: data_obj,
+                        url:  ajaxUrl,
                         type: 'POST',
+                        data: {
+                            _wpnonce:              nonce,
+                            action:                action,
+                            wt_review_action_type: actionType,
+                            wt_review_item_type:   $banner.attr('data-wt-review-item-type') || ''
+                        }
                     });
+                }
 
-                });
+                function bindReviewBannerHandlers() {
+                    $('.wbtf-review-banner').each(function() {
+                        var $banner = $(this);
+                        if ($banner.data('wt-review-bound')) {
+                            return;
+                        }
+                        $banner.data('wt-review-bound', true);
 
-            })(jQuery)
+                        $banner.on('click', 'a.button, a.wbtf-review-link', function(e) {
+                            e.preventDefault();
+                            var $btn      = $(this);
+                            var btnType   = $btn.attr('data-type');
+                            var reviewUrl = $banner.attr('data-wt-review-url');
+                            if ('review' === btnType && reviewUrl) {
+                                window.open(reviewUrl);
+                            }
+                            $banner.hide();
+                            submitReviewAction($banner, btnType);
+                        });
+
+                        $banner.on('click', '.notice-dismiss', function(e) {
+                            e.preventDefault();
+                            submitReviewAction($banner, 'closed');
+                        });
+                    });
+                }
+
+                $(bindReviewBannerHandlers);
+                $(window).on('load', bindReviewBannerHandlers);
+            })(jQuery);
         </script>
         <?php
     }

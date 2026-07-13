@@ -1,10 +1,20 @@
 /**
  * Design System Extensions
  *
- * This script extends the design system library functionality.
+ * Guards the DS-library help widget against a cross-plugin interaction bug.
  *
- * Extensions included:
- * - Help widget: Extends widget selector to support all basic plugins (order, product, user)
+ * Background: the design-system library (admin/wt-ds/js/script.js) ships with the
+ * Order, Product and User basic plugins. Each copy of the library registers a
+ * document-level click-outside-to-close handler that only knows about its own
+ * plugin's widget selector (e.g. the Order copy checks .wbte_oimpexp_help-widget).
+ * When multiple basic plugins are active on the same site, a click on Product's
+ * widget bubbles to document, where Order's library sees "click was outside my
+ * widget" and closes Order's help panel by accident (and vice versa).
+ *
+ * Fix: attach a click guard to each help widget that stops the click from
+ * bubbling to document when it originated INSIDE a widget. Every library copy's
+ * own close-outside logic then fires only for genuinely-outside clicks, which is
+ * the intended behaviour. Public jQuery API only; no library files touched.
  */
 (function($) {
 	'use strict';
@@ -16,52 +26,13 @@
 
 	var HELP_WIDGET_SELECTOR = '.wbte_oimpexp_help-widget, .wbte_pimpexp_help-widget, .wbte_uimpexp_help-widget';
 
-	function isHelpWidgetDocumentClickHandler(fn) {
-		if (typeof fn !== 'function') {
-			return false;
-		}
-
-		var handlerStr = fn.toString();
-		return handlerStr.indexOf('wt_ds_help-widget_hidden_checkbox') !== -1 &&
-			(
-				handlerStr.indexOf('wbte_oimpexp_help-widget') !== -1 ||
-				handlerStr.indexOf('wbte_pimpexp_help-widget') !== -1 ||
-				handlerStr.indexOf('wbte_uimpexp_help-widget') !== -1
-			);
-	}
-
-	function removeLegacyHelpWidgetClickHandlers() {
-		try {
-			var events = $._data(document, 'events');
-			if (!events || !events.click) {
-				return;
-			}
-
-			events.click = events.click.filter(function(handler) {
-				return !(handler && handler.handler && isHelpWidgetDocumentClickHandler(handler.handler));
-			});
-		} catch (err) {}
-	}
-
-	function getHelpWidgetObjects() {
-		var widgetObjects = [];
-		if (typeof wbte_oimpexp_help_widget !== 'undefined') {
-			widgetObjects.push(wbte_oimpexp_help_widget);
-		}
-		if (typeof wbte_pimpexp_help_widget !== 'undefined') {
-			widgetObjects.push(wbte_pimpexp_help_widget);
-		}
-		if (typeof wbte_uimpexp_help_widget !== 'undefined') {
-			widgetObjects.push(wbte_uimpexp_help_widget);
-		}
-		return widgetObjects;
-	}
-
 	function bindWidgetClickGuards() {
 		$(HELP_WIDGET_SELECTOR).each(function() {
 			var $widget = $(this);
 
 			$widget.off('click.wt_ds_help_widget_guard').on('click.wt_ds_help_widget_guard', function(e) {
+				// Let anchors keep their default behaviour (navigation) and bubble so the
+				// library closes the widget on link-click, matching prior UX.
 				if ($(e.target).closest('a').length) {
 					return;
 				}
@@ -70,88 +41,6 @@
 		});
 	}
 
-	function bindUnifiedHelpWidgetHandler() {
-		$(document).off('click.wt_ds_help_widget').on('click.wt_ds_help_widget', function(e) {
-			var allWidgets = $(HELP_WIDGET_SELECTOR);
-			var clickInsideWidget = false;
-
-			allWidgets.each(function() {
-				var $widget = $(this);
-				if ($widget.is(e.target) || $widget.has(e.target).length) {
-					clickInsideWidget = true;
-					return false;
-				}
-			});
-
-			if (!clickInsideWidget) {
-				allWidgets.each(function() {
-					var $checkbox = $(this).find('#wt_ds_help-widget_hidden_checkbox');
-					if ($checkbox.length && $checkbox.is(':checked')) {
-						$checkbox.prop('checked', false);
-					}
-				});
-			}
-		});
-
-		bindWidgetClickGuards();
-	}
-
-	window.wt_ds_unified_help_widget_set = function() {
-		removeLegacyHelpWidgetClickHandlers();
-		bindUnifiedHelpWidgetHandler();
-	};
-
-	function applyHelpWidgetFix() {
-		var widgetObjects = getHelpWidgetObjects();
-
-		$.each(widgetObjects, function(index, widgetObj) {
-			widgetObj.Set = window.wt_ds_unified_help_widget_set;
-		});
-
-		window.wt_ds_unified_help_widget_set();
-	}
-
-	// The design-system library loads after this file and re-binds its own document-level click
-	// handler for the help widget, which re-introduces the bug this extension is fixing. We
-	// intercept $.fn.on globally only to detect that specific late-bound handler (matched by the
-	// hidden-checkbox + widget-class string heuristic in isHelpWidgetDocumentClickHandler) and
-	// swap in our unified handler instead. All other `.on()` calls fall through untouched.
-	var originalOn = $.fn.on;
-	$.fn.on = function(types, selector, data, handler) {
-		if (this.length && this[0] === document && typeof types === 'string' && types.indexOf('click') !== -1) {
-			var fn = null;
-			if (typeof selector === 'function') {
-				fn = selector;
-			} else if (typeof data === 'function') {
-				fn = data;
-			} else if (typeof handler === 'function') {
-				fn = handler;
-			}
-
-			if (fn && isHelpWidgetDocumentClickHandler(fn)) {
-				applyHelpWidgetFix();
-				return this;
-			}
-		}
-
-		return originalOn.apply(this, arguments);
-	};
-
-	$.each(getHelpWidgetObjects(), function(index, widgetObj) {
-		if (widgetObj.Set && typeof widgetObj.Set === 'function') {
-			widgetObj._originalSet = widgetObj.Set;
-			widgetObj.Set = function() {};
-		}
-	});
-
-	function initHelpWidgetExtensions() {
-		applyHelpWidgetFix();
-	}
-
-	$(document).ready(function() {
-		initHelpWidgetExtensions();
-		setTimeout(initHelpWidgetExtensions, 300);
-	});
-
-	$(window).on('load', initHelpWidgetExtensions);
+	$(document).ready(bindWidgetClickGuards);
+	$(window).on('load', bindWidgetClickGuards);
 })(jQuery);

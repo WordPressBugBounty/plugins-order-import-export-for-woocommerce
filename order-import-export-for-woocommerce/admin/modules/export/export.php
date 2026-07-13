@@ -165,6 +165,16 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			'help_text'=>__( "The BOM will help some programs like Microsoft Excel read your export file if it includes non-English characters.", 'order-import-export-for-woocommerce' ),
 		);
 		
+		$fields['include_timezone_offset'] = array(
+			'label'           => __( 'Include timezone offset in dates', 'order-import-export-for-woocommerce' ),
+			'value'           => 0,
+			'checkbox_fields' => array( 1 => __( 'Enable', 'order-import-export-for-woocommerce' ) ),
+			'type'            => 'checkbox',
+			'field_name'      => 'include_timezone_offset',
+			'field_group'     => 'advanced_field',
+			'help_text'       => __( 'Appends the site timezone offset to exported date columns (e.g. 2026-03-03 16:31:31 +0530). Required for accurate cross-timezone imports.', 'order-import-export-for-woocommerce' ),
+		);
+
 		$fields['default_export_batch']=array(
 			'label'=>__("Default Export batch count", 'order-import-export-for-woocommerce'),
 			'type'=>'number',
@@ -778,8 +788,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 
 				include_once WT_O_IEW_PLUGIN_PATH.'admin/classes/class-csvwriter.php';
 				$writer=new Wt_Import_Export_For_Woo_Order_Basic_Csvwriter($file_path, $offset, $csv_delimiter, $this->use_bom);
+				$writer->include_timezone_offset = (bool) Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings( 'include_timezone_offset' );
 
-                                                
                         /**
 			*	Alter export data before writing to file.
 			*	@param 	array 	$export_data  		data to export

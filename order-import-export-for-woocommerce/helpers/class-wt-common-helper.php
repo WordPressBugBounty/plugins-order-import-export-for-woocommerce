@@ -418,6 +418,16 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
 		return $local->format( 'Y-m-d H:i:s O' );
 	}
 
+	public static function format_date_for_export( $wc_datetime, $include_offset = false ) {
+		if ( ! $wc_datetime instanceof \WC_DateTime ) {
+			return '';
+		}
+		$local = clone $wc_datetime;
+		$local->setTimezone( wp_timezone() );
+		$format = $include_offset ? 'Y-m-d H:i:s O' : 'Y-m-d H:i:s';
+		return $local->format( $format );
+	}
+
 	/**
 	 * Whether a CSV date string carries an explicit timezone (offset or Z).
 	 *
