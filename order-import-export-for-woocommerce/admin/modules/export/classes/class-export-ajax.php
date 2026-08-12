@@ -523,39 +523,39 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export_Ajax
 			$link_array = array(
 				'order' => array(
 					'link'  => 'https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Order_Import_Export',
-					'text' => 'Upgrade to Order Import Export Pro.',
+					'text' => __('Upgrade to Order Import Export Pro.', 'order-import-export-for-woocommerce'),
 				),
 				'coupon' => array(
 					'link'  => 'https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Order_Import_Export',
-					'text' => 'Upgrade to Order Import Export Pro.',
+					'text' => __('Upgrade to Order Import Export Pro.', 'order-import-export-for-woocommerce'),
 				),
 				'product' => array(
 					'link' => 'https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export',
-					'text' => 'Upgrade to Product Import Export Pro.',
+					'text' => __('Upgrade to Product Import Export Pro.', 'order-import-export-for-woocommerce'),
 				),
 				'product_review' => array(
 					'link' => 'https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export',
-					'text' => 'Upgrade to Product Import Export Pro.'
+					'text' => __('Upgrade to Product Import Export Pro.', 'order-import-export-for-woocommerce')
 
 				),
 				'product_categories' => array(
 					'link' => 'https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export',
-					'text' => 'Upgrade to Product Import Export Pro.'
+					'text' => __('Upgrade to Product Import Export Pro.', 'order-import-export-for-woocommerce')
 
 				),
 				'product_tags' => array(
 					'link' => 'https://www.webtoffee.com/product/product-import-export-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Product_Import_Export',
-					'text' => 'Upgrade to Product Import Export Pro.'
+					'text' => __('Upgrade to Product Import Export Pro.', 'order-import-export-for-woocommerce')
 
 				),
 				'user' => array(
 					'link' => 'https://www.webtoffee.com/product/wordpress-users-woocommerce-customers-import-export/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=User_Import_Export',
-					'text' => 'Upgrade to User Import Export Pro.'
+					'text' => __('Upgrade to User Import Export Pro.', 'order-import-export-for-woocommerce')
 
 				),
 				'subscription' => array(
 					'link' => 'https://www.webtoffee.com/product/order-import-export-plugin-for-woocommerce/?utm_source=free_plugin_file_upload&utm_medium=basic_revamp&utm_campaign=Order_Import_Export',
-					'text' => 'Upgrade to Order Import Export Pro.'
+					'text' => __('Upgrade to Order Import Export Pro.', 'order-import-export-for-woocommerce')
 
 				),
 			);

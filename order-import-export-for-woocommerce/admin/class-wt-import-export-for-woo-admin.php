@@ -97,6 +97,7 @@ if (!class_exists('Wt_Import_Export_For_Woo_Order_Admin_Basic')) {
 		{
 			if (Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::wt_is_screen_allowed()) {
 				wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/wt-import-export-for-woo-admin.css', array(), $this->version, 'all');
+				wp_enqueue_style( 'wt-oiw-other-solutions', plugin_dir_url( __FILE__ ) . 'css/wt-oiw-os-other-solutions.css', array( 'dashicons' ), $this->version, 'all' );
 			}
 		}
 
@@ -138,6 +139,8 @@ if (!class_exists('Wt_Import_Export_For_Woo_Order_Admin_Basic')) {
 					true
 				);
 
+				wp_enqueue_script( 'wt-oiw-other-solutions', plugin_dir_url( __FILE__ ) . 'js/wt-oiw-os-other-solutions.js', array( 'jquery' ), $this->version, true );
+
 				$product_addon_active_status = is_plugin_active('product-import-export-for-woo/product-import-export-for-woo.php');
 				$user_addon_active_status = is_plugin_active('users-customers-import-export-for-wp-woocommerce/users-customers-import-export-for-wp-woocommerce.php');
 
@@ -173,8 +176,10 @@ if (!class_exists('Wt_Import_Export_For_Woo_Order_Admin_Basic')) {
 						'cancel' => __('Cancel', 'order-import-export-for-woocommerce'),
 						'hide_features' => __('Hide features', 'order-import-export-for-woocommerce'),
 						'show_features' => __('Show features', 'order-import-export-for-woocommerce'),
-						'changes_not_saved'=> __('Changes that you made may not be saved.', 'order-import-export-for-woocommerce')
-				
+						'changes_not_saved'=> __('Changes that you made may not be saved.', 'order-import-export-for-woocommerce'),
+						'stop_import_confirm' => __('Are you sure to stop the import?', 'order-import-export-for-woocommerce'),
+						'import_cancelled' => __('Import cancelled', 'order-import-export-for-woocommerce')
+
 					),
 					'is_variable_product_exist' => $is_variable_product_exist,
 					'pro_plugins' => array(

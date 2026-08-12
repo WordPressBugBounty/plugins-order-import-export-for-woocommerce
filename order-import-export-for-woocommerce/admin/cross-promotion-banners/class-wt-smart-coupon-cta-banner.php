@@ -167,18 +167,18 @@ if ( ! class_exists( 'Wt_Smart_Coupon_Cta_Banner' ) ) {
 			// Verify nonce for security
 			$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
 			if ( ! wp_verify_nonce( $nonce, 'wt_dismiss_smart_coupon_cta_banner_nonce' ) ) {
-				wp_send_json_error( 'Invalid nonce' );
+				wp_send_json_error( esc_html__( 'Invalid nonce', 'order-import-export-for-woocommerce' ) );
 			}
 
 			// Check if user has permission
 			if ( ! current_user_can( 'manage_options' ) ) {
-				wp_send_json_error( 'Insufficient permissions' );
+				wp_send_json_error( esc_html__( 'Insufficient permissions', 'order-import-export-for-woocommerce' ) );
 			}
 
 			// Update the option to hide the banner
 			update_option( 'wt_hide_smart_coupon_cta_banner', true );
 
-			wp_send_json_success( 'Banner dismissed successfully' );
+			wp_send_json_success( __( 'Banner dismissed successfully', 'order-import-export-for-woocommerce' ) );
 		}
 	}
 

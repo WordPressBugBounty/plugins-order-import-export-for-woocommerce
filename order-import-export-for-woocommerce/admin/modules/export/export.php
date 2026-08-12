@@ -353,7 +353,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
                     'value' => '',
                     'type' => 'number',
                     'field_name' => 'limit',
-                    'placeholder' => 'Unlimited',
+                    'placeholder' => __('Unlimited', 'order-import-export-for-woocommerce'),
                     'help_text' => __('The actual number of records you want to export. e.g. A limit of 500 with an offset 10 will export records from 11th to 510th position.', 'order-import-export-for-woocommerce'),
                     'attr' => array('step' => 1, 'min' => 0),
                     'validation_rule' => array('type' => 'absint')

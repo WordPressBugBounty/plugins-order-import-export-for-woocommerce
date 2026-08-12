@@ -83,7 +83,7 @@ if ( ! class_exists( 'Wt_Import_Export_For_Woo_Order_Basic' ) ) {
 			if (defined('WT_O_IEW_VERSION')) {
 				$this->version = WT_O_IEW_VERSION;
 			} else {
-				$this->version = '2.7.6';
+				$this->version = '2.7.7';
 			}
 			$this->plugin_name = 'wt-import-export-for-woo-basic';
 
@@ -176,9 +176,9 @@ if ( ! class_exists( 'Wt_Import_Export_For_Woo_Order_Basic' ) ) {
 			}
 
 			/**
-			 * Class includes helper functions for EMA cta banner in analytics page.
+			 * Class includes helper functions for Smart Coupons CTA banner on the Analytics Revenue page.
 			 */
-			require_once plugin_dir_path(dirname(__FILE__)) . 'admin/banner/class-wbte-ema-banner.php';
+			require_once plugin_dir_path(dirname(__FILE__)) . 'admin/banner/class-wbte-smart-coupons-analytics-banner.php';
 
 			/**
 			 * Includes request a feature class file

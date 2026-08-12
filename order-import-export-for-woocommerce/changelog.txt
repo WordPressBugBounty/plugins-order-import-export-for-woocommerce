@@ -1,6 +1,11 @@
 
 == Changelog ==
 
+= 2.7.7 2026-08-12 =
+* [Update] - Translation updates.
+* [Compatibility] – Tested OK with WordPress 7.0.3
+* [Compatibility] – Tested OK with WooCommerce 11.0.1
+
 = 2.7.6 2026-07-13 =
 * [Feature] - Added an opt-in toggle to include timezone offset in exported order dates.
 * [Compatibility] – Tested OK with WordPress 7.0.1
