@@ -1,6 +1,9 @@
 
 == Changelog ==
 
+= 2.7.8 2026-09-01 =
+* [Compatibility] – Tested OK with WordPress 7.1
+
 = 2.7.7 2026-08-12 =
 * [Update] - Translation updates.
 * [Compatibility] – Tested OK with WordPress 7.0.3
