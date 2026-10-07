@@ -1,6 +1,11 @@
 
 == Changelog ==
 
+= 2.7.9 2026-10-07 =
+* [Compatibility] – Tested OK with WordPress 7.1.2
+* [Compatibility] – Tested OK with WooCommerce 11.1.2
+* [Fix] - Security: hardened export directory guards and randomized auto-generated export filenames. Reported by Boluwatife Opeyemi (tcyph3r) via Wordfence.
+
 = 2.7.8 2026-09-01 =
 * [Compatibility] – Tested OK with WordPress 7.1
 

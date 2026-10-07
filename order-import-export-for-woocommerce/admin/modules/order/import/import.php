@@ -47,6 +47,34 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
      */
     private $coupon_post_id_by_code = array();
 
+    /**
+     * Snapshot of the WP_Hook objects for email-related hooks that suppress_wc_emails()
+     * wipes with remove_all_actions(). Keyed by hook name, value is the WP_Hook instance
+     * captured from $wp_filter before the wipe. restore_wc_emails() writes these back.
+     *
+     * @var array<string,\WP_Hook|null>
+     */
+    private $email_hook_snapshot = array();
+
+    /**
+     * Per parent-action record of which WC_Emails dispatcher was attached before suppress
+     * (send_transactional_email or queue_transactional_email) and at what priority, so
+     * restore_wc_emails() re-adds the same callback at the same priority. Avoids drift if
+     * the woocommerce_defer_transactional_emails filter changes mid-request or if WC/a
+     * third-party registered at a non-10 priority.
+     *
+     * @var array<string,array{type:string,priority:int}>
+     */
+    private $email_dispatcher_registry = array();
+
+    /**
+     * True while a suppress_wc_emails() call is active. Guards against re-entrant suppress
+     * calls overwriting the snapshot with already-suppressed state.
+     *
+     * @var bool
+     */
+    private $email_suppression_active = false;
+
     // Results
     var $import_results = array();
 
@@ -87,33 +115,39 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         $success = 0;
         $failed = 0;
         $msg = 'Order imported successfully.';
-                
-        foreach ($import_data as $key => $data) { 
-            $row = $batch_offset+$key+1;
-            Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Parsing item.");
-            $parsed_data = $this->parse_data($data);              
-            if (!is_wp_error($parsed_data)){
-                Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Processing item.");
-                $result = $this->process_item($parsed_data);
-                if(!is_wp_error($result)){
-                    if($this->is_order_exist){
-                        $msg = 'Order updated successfully.';
+
+        $this->suppress_wc_emails();
+
+        try {
+            foreach ($import_data as $key => $data) {
+                $row = $batch_offset+$key+1;
+                Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Parsing item.");
+                $parsed_data = $this->parse_data($data);
+                if (!is_wp_error($parsed_data)){
+                    Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Processing item.");
+                    $result = $this->process_item($parsed_data);
+                    if(!is_wp_error($result)){
+                        if($this->is_order_exist){
+                            $msg = 'Order updated successfully.';
+                        }
+                        $this->import_results[$row] = array('row'=>$row, 'message'=>$msg, 'status'=>true, 'status_msg' => __( 'Success', 'order-import-export-for-woocommerce' ), 'post_id'=>$result['id'], 'post_link' => Wt_Import_Export_For_Woo_Order_Basic_Order::get_item_link_by_id($result['id']));
+                        Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - ".$msg);
+                        $success++;
+                    }else{
+                        $this->import_results[$row] = array('row'=>$row, 'message'=>$result->get_error_message(), 'status'=>false, 'status_msg' => __( 'Failed/Skipped', 'order-import-export-for-woocommerce' ), 'post_id'=>'', 'post_link' => array( 'title' => __( 'Untitled', 'order-import-export-for-woocommerce' ), 'edit_url' => false ) );
+                        Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Processing failed. Reason: ".$result->get_error_message());
+                       $failed++;
                     }
-                    $this->import_results[$row] = array('row'=>$row, 'message'=>$msg, 'status'=>true, 'status_msg' => __( 'Success', 'order-import-export-for-woocommerce' ), 'post_id'=>$result['id'], 'post_link' => Wt_Import_Export_For_Woo_Order_Basic_Order::get_item_link_by_id($result['id'])); 
-                    Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - ".$msg);                    
-                    $success++;                     
                 }else{
-                    $this->import_results[$row] = array('row'=>$row, 'message'=>$result->get_error_message(), 'status'=>false, 'status_msg' => __( 'Failed/Skipped', 'order-import-export-for-woocommerce' ), 'post_id'=>'', 'post_link' => array( 'title' => __( 'Untitled', 'order-import-export-for-woocommerce' ), 'edit_url' => false ) );
-                    Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Processing failed. Reason: ".$result->get_error_message());                   
+                   $this->import_results[$row] = array('row'=>$row, 'message'=>$parsed_data->get_error_message(), 'status'=>false, 'status_msg' => __( 'Failed/Skipped', 'order-import-export-for-woocommerce' ), 'post_id'=>'', 'post_link' => array( 'title' => __( 'Untitled', 'order-import-export-for-woocommerce' ), 'edit_url' => false ) );
+                   Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Parsing failed. Reason: ".$parsed_data->get_error_message());
                    $failed++;
-                }                
-            }else{
-               $this->import_results[$row] = array('row'=>$row, 'message'=>$parsed_data->get_error_message(), 'status'=>false, 'status_msg' => __( 'Failed/Skipped', 'order-import-export-for-woocommerce' ), 'post_id'=>'', 'post_link' => array( 'title' => __( 'Untitled', 'order-import-export-for-woocommerce' ), 'edit_url' => false ) );
-               Wt_Import_Export_For_Woo_Basic_Logwriter::write_log($this->parent_module->module_base, 'import', "Row :$row - Parsing failed. Reason: ".$parsed_data->get_error_message());               
-               $failed++;                
-            }            
+                }
+            }
+        } finally {
+            $this->restore_wc_emails();
         }
-        
+
         if($is_last_batch && $this->delete_existing){
             $this->delete_existing();                        
         } 
@@ -1939,17 +1973,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
             $post_id = $data['order_id'];
 
             $status = !empty($data['status']) ? $data['status'] : 'wc-pending';
-            
-            add_action( 'woocommerce_email', array($this, 'wt_iew_order_import_unhook_woocommerce_email') );  // disabled all order related email sending. Need to implimet a way to send status change email based on $this->status_mail flag
-            remove_all_actions('woocommerce_email_attachments');
-            
-            remove_all_actions('woocommerce_order_status_refunded_notification');
-            remove_all_actions('woocommerce_order_partially_refunded_notification');
-            remove_action('woocommerce_order_status_refunded', array('WC_Emails', 'send_transactional_email'));
-            remove_action('woocommerce_order_partially_refunded', array('WC_Emails', 'send_transactional_email'));
-            remove_action('woocommerce_order_fully_refunded', array('WC_Emails', 'send_transactional_email'));
 
-            
             $order = wc_create_order($data);            
             if (is_wp_error($order)) {
                 return $order;
@@ -2375,11 +2399,6 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                         'order_id' => $order_id,
                     );
                     $input_currency = isset($data['currency']) ? $data['currency'] : $order->get_currency();
-                    remove_all_actions('woocommerce_order_status_refunded_notification');
-                    remove_all_actions('woocommerce_order_partially_refunded_notification');
-                    remove_action('woocommerce_order_status_refunded', array('WC_Emails', 'send_transactional_email'));
-                    remove_action('woocommerce_order_partially_refunded', array('WC_Emails', 'send_transactional_email'));
-                    remove_action('woocommerce_order_fully_refunded', array('WC_Emails', 'send_transactional_email'));
                     $this->wt_create_refund($input_currency, $args);
                 }
             }
@@ -2617,8 +2636,6 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
 		 */
 		do_action( 'woocommerce_create_refund', $refund, $args );
 
-                add_action( 'woocommerce_email', array($this, 'wt_iew_order_import_unhook_woocommerce_email') );    
-                
 		if ( $refund->save() ) {
 			if ( $args['refund_payment'] ) {
 				$result = wc_refund_payment( $order, $refund->get_amount(), $refund->get_reason() );
@@ -2690,6 +2707,124 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
 
     }
     
+    /**
+     * Suppress all WooCommerce transactional emails for the duration of the import batch.
+     *
+     * Called once before the import loop. Removes the per-email-class _notification
+     * listeners via the existing unhook helper, removes the parent-action bindings
+     * registered by WC_Emails::init_transactional_emails(), and short-circuits the
+     * background emailer path via filter.
+     */
+    private function suppress_wc_emails() {
+        global $wp_filter;
+
+        if ( $this->email_suppression_active ) {
+            return;
+        }
+        $this->email_suppression_active = true;
+
+        $mailer = WC()->mailer();
+        $this->wt_iew_order_import_unhook_woocommerce_email( $mailer );
+
+        $nuke_hooks = array(
+            'woocommerce_email_attachments',
+            'woocommerce_order_status_refunded_notification',
+            'woocommerce_order_partially_refunded_notification',
+        );
+        foreach ( $nuke_hooks as $hook ) {
+            $this->email_hook_snapshot[ $hook ] = isset( $wp_filter[ $hook ] ) ? $wp_filter[ $hook ] : null;
+            remove_all_actions( $hook );
+        }
+
+        // Mirror the list WC_Emails::init_transactional_emails() hooks, so triggers added
+        // by future WC versions or third-party plugins are covered without a code change.
+        $email_actions = (array) apply_filters(
+            'woocommerce_email_actions',
+            array(
+                'woocommerce_low_stock',
+                'woocommerce_no_stock',
+                'woocommerce_product_on_backorder',
+                'woocommerce_order_status_pending_to_processing',
+                'woocommerce_order_status_pending_to_completed',
+                'woocommerce_order_status_pending_to_cancelled',
+                'woocommerce_order_status_pending_to_failed',
+                'woocommerce_order_status_pending_to_on-hold',
+                'woocommerce_order_status_failed_to_processing',
+                'woocommerce_order_status_failed_to_completed',
+                'woocommerce_order_status_failed_to_on-hold',
+                'woocommerce_order_status_cancelled_to_processing',
+                'woocommerce_order_status_cancelled_to_completed',
+                'woocommerce_order_status_cancelled_to_on-hold',
+                'woocommerce_order_status_on-hold_to_processing',
+                'woocommerce_order_status_on-hold_to_cancelled',
+                'woocommerce_order_status_on-hold_to_failed',
+                'woocommerce_order_status_processing_to_cancelled',
+                'woocommerce_order_status_completed',
+                'woocommerce_order_status_failed',
+                'woocommerce_order_fully_refunded',
+                'woocommerce_order_partially_refunded',
+                'woocommerce_new_customer_note',
+                'woocommerce_created_customer',
+                'woocommerce_send_review_request',
+                'woocommerce_payment_gateway_enabled',
+            )
+        );
+
+        $this->email_dispatcher_registry = array();
+        foreach ( $email_actions as $action ) {
+            $send_priority  = has_action( $action, array( 'WC_Emails', 'send_transactional_email' ) );
+            $queue_priority = has_action( $action, array( 'WC_Emails', 'queue_transactional_email' ) );
+            if ( false !== $send_priority ) {
+                $this->email_dispatcher_registry[ $action ] = array( 'type' => 'send', 'priority' => (int) $send_priority );
+                remove_action( $action, array( 'WC_Emails', 'send_transactional_email' ), (int) $send_priority );
+            } elseif ( false !== $queue_priority ) {
+                $this->email_dispatcher_registry[ $action ] = array( 'type' => 'queue', 'priority' => (int) $queue_priority );
+                remove_action( $action, array( 'WC_Emails', 'queue_transactional_email' ), (int) $queue_priority );
+            }
+        }
+
+        add_filter( 'woocommerce_allow_send_queued_transactional_email', '__return_false' );
+    }
+
+    /**
+     * Restore WooCommerce transactional email hooks after the import batch completes.
+     *
+     * Mirrors suppress_wc_emails(). Re-adds the same dispatcher callback (send or queue)
+     * at the same priority that was captured in the registry, writes back the WP_Hook
+     * snapshots for the nuked hooks (preserving third-party listeners), and re-attaches
+     * the per-email-class _notification listeners via the existing hook helper. Safe to
+     * call unconditionally — a no-op if suppress_wc_emails() was not active.
+     */
+    private function restore_wc_emails() {
+        global $wp_filter;
+
+        if ( ! $this->email_suppression_active ) {
+            return;
+        }
+
+        $mailer = WC()->mailer();
+        $this->wt_iew_order_import_hook_woocommerce_email( $mailer );
+
+        foreach ( $this->email_hook_snapshot as $hook => $snapshot ) {
+            if ( null !== $snapshot ) {
+                $wp_filter[ $hook ] = $snapshot;
+            }
+        }
+        $this->email_hook_snapshot = array();
+
+        foreach ( $this->email_dispatcher_registry as $action => $record ) {
+            $callback = 'queue' === $record['type']
+                ? array( 'WC_Emails', 'queue_transactional_email' )
+                : array( 'WC_Emails', 'send_transactional_email' );
+            add_action( $action, $callback, $record['priority'], 10 );
+        }
+        $this->email_dispatcher_registry = array();
+
+        remove_filter( 'woocommerce_allow_send_queued_transactional_email', '__return_false' );
+
+        $this->email_suppression_active = false;
+    }
+
     /**
      * Check HPOS support is enabled in the store
      * @return bool

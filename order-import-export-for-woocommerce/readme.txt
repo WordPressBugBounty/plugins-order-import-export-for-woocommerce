@@ -4,7 +4,7 @@ Tags: woocommerce export orders, woocommerce import orders, advanced order expor
 Requires at least: 3.0
 Tested up to: 7.1
 Requires PHP: 5.6
-Stable tag: 2.7.8
+Stable tag: 2.7.9
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -31,7 +31,7 @@ The following are functionalities offered by the basic version of the WooCommerc
  &#128312; **YITH Compatibility:** Compatible with YITH WooCommerce Order Tracking plugin.
  &#128312; **Export Filters:** Supports various export orders filters (order status, product, coupon, customer, date range) for order export to CSV.
  &#9989; Tested OK with WordPress 7.1
- &#9989; Tested OK with WooCommerce 11.0.1
+ &#9989; Tested OK with WooCommerce 11.1.2
  &#9989; Tested OK with PHP 8.3
 
 = Advanced Features for Seamless CSV Export and Import =
@@ -211,12 +211,16 @@ Yes.
 
 == Changelog ==
 
-= 2.7.8 2026-09-01 =
-* [Compatibility] – Tested OK with WordPress 7.1
+= 2.7.9 2026-10-07 =
+* [Compatibility] – Tested OK with WordPress 7.1.2
+* [Compatibility] – Tested OK with WooCommerce 11.1.2
+* [Fix] - Security: hardened export directory guards and randomized auto-generated export filenames. Reported by Boluwatife Opeyemi (tcyph3r) via Wordfence.
 
 [See changelog for all versions](https://plugins.svn.wordpress.org/order-import-export-for-woocommerce/trunk/changelog.txt)
 
 == Upgrade Notice ==
 
-= 2.7.8 =
-* [Compatibility] – Tested OK with WordPress 7.1
+= 2.7.9 =
+* [Compatibility] – Tested OK with WordPress 7.1.2
+* [Compatibility] – Tested OK with WooCommerce 11.1.2
+* [Fix] - Security: hardened export directory guards and randomized auto-generated export filenames. Reported by Boluwatife Opeyemi (tcyph3r) via Wordfence.
