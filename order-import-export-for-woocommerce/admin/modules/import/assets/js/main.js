@@ -252,6 +252,14 @@ var wt_iew_basic_import=(function( $ ) {
 				});
 			}else if(action=='validate_file' || action=='download')
 			{
+				// Block submission when the current step's form has invalid required
+				// fields (e.g. blank "Import in batches of"). Shows the native
+				// browser validation bubble.
+				var cur_form=$('.wt_iew_import_'+this.current_step+'_form')[0];
+				if(cur_form && typeof cur_form.reportValidity==='function' && !cur_form.reportValidity())
+				{
+					return;
+				}
 				this.prepare_form_data();
 				this.ajax_data['form_data']=this.form_data;
 				this.do_nonstep_action(action);
@@ -529,6 +537,24 @@ var wt_iew_basic_import=(function( $ ) {
                                     var temp_err_message = wt_iew_basic_params.msgs.error;
                                     wt_iew_basic_params.msgs.error = wt_iew_basic_params.msgs.import_cancelled;
                                     wt_iew_basic_import.import_finished = true;
+                                    // Mark the server-side History row failed with
+                                    // "Cancelled by user" before aborting — otherwise
+                                    // the row stays stuck in Running/Incomplete.
+                                    var cancel_import_id = (wt_iew_basic_import.ajax_data && wt_iew_basic_import.ajax_data.import_id) ? wt_iew_basic_import.ajax_data.import_id : 0;
+                                    if (cancel_import_id) {
+                                        $.ajax({
+                                            type: 'POST',
+                                            url: wt_iew_basic_params.ajax_url,
+                                            data: {
+                                                '_wpnonce': wt_iew_basic_params.nonces.main,
+                                                'action': 'iew_import_ajax_basic',
+                                                'import_action': 'cancel_import',
+                                                'to_import': wt_iew_basic_import.to_import,
+                                                'import_id': cancel_import_id,
+                                                'data_type': 'json'
+                                            }
+                                        });
+                                    }
                                     wt_iew_basic_import.import_ajax_xhr.abort();
                                     wt_iew_basic_params.msgs.error = temp_err_message;
                                     var progressval = 1;

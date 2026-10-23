@@ -147,20 +147,36 @@ if ( ! defined( 'WPINC' ) ) {
 				<td><?php echo esc_html($history_item['id']); ?></td>
 				<td><?php echo esc_html(ucfirst($history_item['template_type'])); ?></td>
 				<td><?php echo esc_html(ucfirst($history_item['item_type'])); ?></td>
-				<td><?php echo esc_html(date_i18n('Y-m-d h:i:s A', $history_item['created_at'])); ?></td>
+				<td><?php echo esc_html(wp_date('Y-m-d h:i:s A', $history_item['created_at'])); ?></td>
 				<td>
 					<?php
-					echo esc_html(isset(self::$status_label_arr[$history_item['status']]) ? self::$status_label_arr[$history_item['status']] : __('Unknown', 'order-import-export-for-woocommerce'));
+					$status_label = isset( self::$status_label_arr[ $history_item['status'] ] )
+						? self::$status_label_arr[ $history_item['status'] ]
+						: __( 'Unknown', 'order-import-export-for-woocommerce' );
+					// Surface non-generic status_text (e.g. "Cancelled by user")
+					// alongside the status label so cancelled runs don't look
+					// like ordinary failures. Skip the stock "Pending" seed value
+					// create_history_entry() writes on insert.
+					$status_text = isset( $history_item['status_text'] ) ? trim( (string) $history_item['status_text'] ) : '';
+					if ( '' !== $status_text && 0 !== strcasecmp( $status_text, 'Pending' ) && 0 !== strcasecmp( $status_text, $status_label ) ) {
+						echo esc_html( $status_label ) . ' <span class="description" style="color:#666;">(' . esc_html( $status_text ) . ')</span>';
+					} else {
+						echo esc_html( $status_label );
+					}
 					?>
 				</td>
 				<td>
 					<a class="wt_iew_delete_history" data-href="<?php echo esc_url(str_replace('_history_id_', $history_item['id'], $delete_url));?>"><?php esc_html_e('Delete', 'order-import-export-for-woocommerce'); ?></a>
 					<?php
-					$form_data_raw = wp_unslash($history_item['data']);
-					$form_data = is_array($form_data_raw) ? 
+					// The history data column is written as pure JSON via wp_json_encode()
+					// in create_history_entry() — no slash-escaping applied on insert, so
+					// wp_unslash() here would strip the backslashes that JSON uses to
+					// escape embedded quotes and break json_decode().
+					$form_data_raw = $history_item['data'];
+					$form_data = is_array($form_data_raw) ?
 							array_map(function($item) {
 								return is_string($item) ? json_decode($item, true) : $item;
-							}, $form_data_raw) : 
+							}, $form_data_raw) :
 							json_decode($form_data_raw, true);
 
 					$action_type=$history_item['template_type'];

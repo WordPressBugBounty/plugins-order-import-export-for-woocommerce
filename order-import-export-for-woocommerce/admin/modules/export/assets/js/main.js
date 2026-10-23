@@ -264,6 +264,14 @@ var wt_iew_basic_export=(function( $ ) {
 			{
 				if(action=='export' || action=='export_image')
 				{
+					// Block submission when the current step's form has invalid required
+					// fields (e.g. blank "Export in batches of"). Shows the native
+					// browser validation bubble.
+					var cur_form=$('.wt_iew_export_'+this.current_step+'_form')[0];
+					if(cur_form && typeof cur_form.reportValidity==='function' && !cur_form.reportValidity())
+					{
+						return;
+					}
 					this.ajax_data['offset']=0;
 					this.prepare_form_data();
 					this.ajax_data['form_data']=this.form_data;

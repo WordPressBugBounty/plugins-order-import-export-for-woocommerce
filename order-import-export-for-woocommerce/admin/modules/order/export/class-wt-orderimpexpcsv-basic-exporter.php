@@ -87,6 +87,11 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
         header('Expires: 0');
 
         $fp = fopen('php://output', 'w');
+        // Emit UTF-8 BOM when enabled so Excel opens non-ASCII content correctly,
+        // matching the wizard export's behaviour.
+        if ( (bool) Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings( 'include_bom' ) ) {
+            fwrite( $fp, "\xEF\xBB\xBF" );
+        }
         
         $order_ids = apply_filters('wt_iew_product_bulk_export_order_ids', $order_ids);
         // Variable to hold the CSV data we're exporting
@@ -252,6 +257,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
     public static function get_orders_csv_row($order_id, $export_columns, $max_line_items, $user_columns_name = array()) {
         $csv_columns = include( __DIR__ . '/../data/data-order-post-columns.php' );
         $version = WC()->version;
+        // Fetch inside this scope — the setting isn't passed from do_export(), so
+        // leaving it undefined silently drops the "Include timezone offset" option.
+        $include_timezone_offset = (bool) Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings( 'include_timezone_offset' );
 
         // Get an instance of the WC_Order object
         $order = wc_get_order($order_id);
@@ -373,7 +381,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
         $fee_tax_total = 0;
         foreach ($order->get_fees() as $fee_id => $fee) {
             $fee_items[] = implode('|', array(
-                'name:' . html_entity_decode($fee['name'], ENT_NOQUOTES, 'UTF-8'),
+                'name:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( html_entity_decode($fee['name'], ENT_NOQUOTES, 'UTF-8') ),
                 'total:' . wc_format_decimal($fee['line_total'], 2),
                 'tax:' . wc_format_decimal($fee['line_tax'], 2),
                 'tax_data:' . json_encode($fee['line_tax_data'])
@@ -382,44 +390,41 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
             $fee_tax_total += $fee['line_tax'];
         }
 
+        // Write cart tax and shipping tax as separate keys per rate so the imported
+        // tax line (tax_amount + shipping_tax_amount) matches the source order
+        // without needing an Update re-import.
         $order_taxes = $order->get_taxes();
-        if (!empty($order_taxes)) {
-            foreach ($order_taxes as $tax_id => $tax_item) {
-
-                if (!empty($tax_item->get_shipping_tax_total())) {
-                    $total = $tax_item->get_tax_total() + $tax_item->get_shipping_tax_total();
-                } else {
-                    $total = $tax_item->get_tax_total();
-                }
-                $tax_items[] = implode('|', array(
+        if ( ! empty( $order_taxes ) ) {
+            foreach ( $order_taxes as $tax_item_id => $tax_item ) {
+                $rate_percent  = wc_get_order_item_meta( $tax_item_id, 'rate_percent', true );
+                $tax_items[]   = implode( '|', array(
                     'rate_id:' . $tax_item->get_rate_id(),
                     'code:' . $tax_item->get_rate_code(),
-                    'total:' . wc_format_decimal($tax_item->get_tax_total(), 2),
+                    'total:' . wc_format_decimal( $tax_item->get_tax_total(), 2 ),
+                    'shipping_tax_amount:' . wc_format_decimal( $tax_item->get_shipping_tax_total(), 2 ),
                     'label:' . $tax_item->get_label(),
-                    'tax_rate_compound:' . $tax_item->get_compound(),
-                ));
+                    'tax_rate_compound:' . ( $tax_item->is_compound() ? 1 : 0 ),
+                    'rate_percent:' . ( '' !== $rate_percent ? $rate_percent : '' ),
+                ) );
             }
         }
 
-        // add coupons
-		if ( ( version_compare( $version, '4.4.0', '<' ) ) ) {
-			foreach ( $order->get_items('coupon') as $_ => $coupon_item ) {
-				$discount_amount = !empty( $coupon_item[ 'discount_amount' ] ) ? $coupon_item[ 'discount_amount' ] : 0;
-				$coupon_items[]	 = implode( '|', array(
-					'code:' . $coupon_item[ 'name' ],
-					'amount:' . wc_format_decimal( $discount_amount, 2 ),
-				) );
-			}
-		} else {
-			foreach ( $order->get_coupon_codes() as $_ => $coupon_code ) {
-				$coupon_obj = new WC_Coupon($coupon_code);
-				$discount_amount = !empty( $coupon_obj->get_amount() ) ? $coupon_obj->get_amount() : 0;
-				$coupon_items[]	 = implode( '|', array(
-					'code:' . $coupon_code,
-					'amount:' . wc_format_decimal( $discount_amount, 2 ),
-				) );
-			}
-		}
+        // Export the per-order applied discount (not the coupon's face value) to
+        // match the wizard exporter and round-trip correctly on import. Carry
+        // discount_tax so the imported coupon line's discount_amount_tax matches.
+        foreach ( $order->get_items('coupon') as $_ => $coupon_item ) {
+            $discount_amount = ( version_compare( $version, '4.4.0', '<' ) ) ? $coupon_item['discount_amount'] : $coupon_item->get_discount();
+            $discount_amount = !empty( $discount_amount ) ? $discount_amount : 0;
+            $coupon_code     = ( version_compare( $version, '4.4.0', '<' ) ) ? $coupon_item['name'] : $coupon_item->get_code();
+            $discount_tax    = ( version_compare( $version, '4.4.0', '<' ) )
+                ? ( isset( $coupon_item['discount_amount_tax'] ) ? $coupon_item['discount_amount_tax'] : 0 )
+                : $coupon_item->get_discount_tax();
+            $coupon_items[]  = implode( '|', array(
+                'code:' . $coupon_code,
+                'amount:' . wc_format_decimal( $discount_amount, 2 ),
+                'discount_tax:' . wc_format_decimal( $discount_tax, 2 ),
+            ) );
+        }
 
         foreach ($order->get_refunds() as $refunded_items) {
 
@@ -432,7 +437,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
             } else {
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_amount(),
-                    'reason:' . $refunded_items->get_reason(),
+                    'reason:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( $refunded_items->get_reason() ),
                     'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $refunded_items->get_date_created(), $include_timezone_offset ),
                 ));
             }
@@ -444,6 +449,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
                 'order_number' => $order->get_order_number(),
                 'order_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $order->get_date_created(), $include_timezone_offset ),
                 'paid_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $order->get_date_paid(), $include_timezone_offset ),
+                'date_completed' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $order->get_date_completed(), $include_timezone_offset ),
                 'status' => $order->get_status(),
                 'shipping_total' => $order->get_total_shipping(),
                 'shipping_tax_total' => wc_format_decimal($order->get_shipping_tax(), 2),
@@ -453,8 +459,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
                 'cart_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_cart_discount') ? wc_format_decimal($order->get_cart_discount(), 2) : '0.00'),
                 'order_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_order_discount') ? wc_format_decimal($order->get_order_discount(), 2) : '0.00'),
                 'discount_total' => wc_format_decimal($order->get_total_discount(), 2),
-                'order_total' => wc_format_decimal($order->get_total(), 2), 
-                'order_subtotal' => wc_format_decimal($order->get_subtotal(), 2),               
+                'discount_tax' => wc_format_decimal($order->get_discount_tax(), 2),
+                'order_total' => wc_format_decimal($order->get_total(), 2),
+                'order_subtotal' => wc_format_decimal($order->get_subtotal(), 2),
                 'order_key' => $order->get_order_key(),
                 'order_currency' => $order->get_currency(),
                 'payment_method' => $order->get_payment_method(),
@@ -642,7 +649,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
         $order_notes = array();
         foreach ($notes as $note) {
             $order_notes[] = implode('|', array(
-                'content:' . str_replace(array("\r", "\n"), ' ', $note->content),
+                'content:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( str_replace(array("\r", "\n"), ' ', $note->content) ),
                 'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $note->date_created, $include_offset ),
                 'customer:' . $note->customer_note,
                 'added_by:' . $note->added_by

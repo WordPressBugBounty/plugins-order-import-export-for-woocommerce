@@ -159,7 +159,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			'field_name'=>'default_import_batch',
 			'help_text'=>__('Provide the default count for the records to be imported in a batch.', 'order-import-export-for-woocommerce'),
 			'validation_rule'=>array('type'=>'absint'),
-			'attr' => array('min' => 1, 'max' => 50, 'step' => 1),
+			'attr' => array('min' => 1, 'max' => 50, 'step' => 1, 'required' => 'required'),
 		);
 
 		return $fields;
@@ -180,7 +180,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 				// translators: %d: number of records
 				'help_text'=>sprintf(__('The number of records that the server will process for every iteration within the configured timeout interval. If the import fails you can lower this number accordingly and try again. Defaulted to %d records.', 'order-import-export-for-woocommerce'), 10),
 				'validation_rule'=>array('type'=>'absint'),
-				'attr' => array('min' => 1, 'step' => 1),
+				'attr' => array('min' => 1, 'step' => 1, 'required' => 'required'),
 			)
 		);
 
@@ -358,7 +358,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 				$history_data=$history_module_obj->get_history_entry_by_id($rerun_id);
 				if($history_data && $history_data['template_type']==$this->module_base)
 				{
-					$form_data_raw = wp_unslash($history_data['data']);
+					// Don't wp_unslash: the DB column is stored as pure JSON — stripping
+					// backslashes here breaks json_decode when any string contains escaped quotes.
+					$form_data_raw = $history_data['data'];
 					$form_data = is_array($form_data_raw) ? 
 							array_map(function($item) {
 								return is_string($item) ? json_decode($item, true) : $item;
@@ -681,7 +683,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		    'stream'      => false,
 		    'filename'    => null
 		);
-		return wp_remote_get($target_url, $def_args);
+		return Wt_Iew_Sh::safe_remote_get($target_url, $def_args);
 	}
 
 	public function get_log_file_name($history_id)
@@ -1026,6 +1028,11 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			$import_data=Wt_Import_Export_For_Woo_Basic_History::get_history_entry_by_id($import_id);
 			if(is_null($import_data)) //no record found so it may be an error
 			{
+				// History row vanished mid-flight — mark as failed so the UI
+				// doesn't stay stuck at "Running/Incomplete".
+				$msg = __( 'History record not found.', 'order-import-export-for-woocommerce' );
+				Wt_Import_Export_For_Woo_Basic_History::record_failure( $import_id, $msg );
+				$out['msg'] = $msg;
 				return $out;
 			}
 
@@ -1066,7 +1073,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		} 
 
 		$default_batch_count=absint(apply_filters('wt_iew_importer_alter_default_batch_count_basic', $this->default_batch_count, $to_process, $form_data));
-		$default_batch_count=($default_batch_count==0 ? $this->default_batch_count : $default_batch_count);
+		$default_batch_count=($default_batch_count==0 ? (int) $this->default_batch_count : $default_batch_count);
+		// Clamp so a blank-and-saved default setting can never produce zero.
+		$default_batch_count = max( 1, $default_batch_count );
 
 		$batch_count=$default_batch_count;
 		$csv_delimiter=',';	
@@ -1078,6 +1087,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		if(isset($form_data['advanced_form_data']))
 		{
 			$batch_count=(isset($form_data['advanced_form_data']['wt_iew_batch_count']) ? $form_data['advanced_form_data']['wt_iew_batch_count'] : $batch_count);
+			// Guard the import AJAX loop against 0/empty batch sizes.
+			$batch_count = max( 1, (int) $batch_count );
 		}
 		if(isset($form_data['method_import_form_data']) && $file_type=='csv')
 		{
@@ -1093,9 +1104,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		/* important: prepare default mapping formdata for quick import */
 		$input_data=$reader->get_data_as_batch($file_path, $offset, $batch_count, $this, $form_data);  
 
-		if(empty($input_data['data_arr'])){			
-			$out['msg']=__('CSV is empty', 'order-import-export-for-woocommerce');
-            return $out;
+		if(empty($input_data['data_arr'])){
+			$msg = __('CSV is empty', 'order-import-export-for-woocommerce');
+			// Record failure so the history row leaves "Running/Incomplete" and
+			// shows the correct terminal status after a header-only CSV.
+			Wt_Import_Export_For_Woo_Basic_History::record_failure( $import_id, $msg );
+			$out['msg'] = $msg;
+			return $out;
 		}
 				
 		if(!$input_data || !is_array($input_data))
@@ -1297,7 +1312,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 			$ajax_obj=new Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax($this, $this->to_import, $this->steps, $this->import_method, $this->selected_template, $this->rerun_id);
 			$data_type=isset($_POST['data_type']) ? sanitize_text_field(wp_unslash($_POST['data_type'])) : '';
 			
-			$allowed_ajax_actions=array('get_steps', 'validate_file', 'get_meta_mapping_fields', 'save_template', 'save_template_as', 'update_template', 'download', 'import', 'upload_import_file', 'delete_import_file');
+			$allowed_ajax_actions=array('get_steps', 'validate_file', 'get_meta_mapping_fields', 'save_template', 'save_template_as', 'update_template', 'download', 'import', 'upload_import_file', 'delete_import_file', 'cancel_import');
 
 			if(method_exists($ajax_obj, $import_action) && in_array($import_action, $allowed_ajax_actions))
 			{
@@ -1395,11 +1410,19 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 					$synatx=$this->validate_syntax($value[1]);
 					if($synatx)
 					{
-						// phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- Sanitized the value before using eval.
-						$replace[]=eval('return '.$synatx.';');
+						// Catch DivisionByZeroError, ParseError and any other eval
+						// failure so a bad expression (user data like "[1/0]" or a
+						// malformed mapping like "[2*]") skips the single bracket
+						// instead of fatally aborting the whole batch.
+						try {
+							// phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- Sanitized the value before using eval.
+							$replace[] = eval('return '.$synatx.';');
+						} catch (\Throwable $e) {
+							$replace[] = $value[0];
+						}
 					}else
 					{
-						$replace[]='';
+						$replace[]=$value[0];
 					}
 					$find[]=$value[0];
 					unset($synatx);
@@ -1528,7 +1551,20 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		return str_replace($find, $replace, $str);
 	}
 	public function get_skip_from_evaluation(){
-		return apply_filters('wt_iew_importer_skip_from_evaluation', array('post_title', 'description','post_content','short_description','post_excerpt','line_item_','shipping_items', 'fee_items', 'customer_note', 'meta:wc_productdata_options', 'order_items', 'shipping_method'));        
+		return apply_filters('wt_iew_importer_skip_from_evaluation', array(
+			'post_title', 'description', 'post_content', 'short_description', 'post_excerpt',
+			'line_item_', 'shipping_items', 'fee_items', 'customer_note',
+			'meta:wc_productdata_options', 'order_items', 'shipping_method',
+			// Order free-text fields (prevent arithmetic/brace eval on user data).
+			'billing_first_name', 'billing_last_name', 'billing_company', 'billing_email', 'billing_phone',
+			'billing_address_1', 'billing_address_2', 'billing_city', 'billing_state', 'billing_postcode', 'billing_country',
+			'shipping_first_name', 'shipping_last_name', 'shipping_company', 'shipping_phone',
+			'shipping_address_1', 'shipping_address_2', 'shipping_city', 'shipping_state', 'shipping_postcode', 'shipping_country',
+			'coupon_items', 'refund_items', 'tax_items', 'order_notes',
+			'transaction_id', 'customer_ip_address', 'customer_user_agent',
+			'payment_method', 'payment_method_title',
+			'order_number', 'order_number_formatted', 'order_key',
+		));
 	}
 	public function get_decimal_columns(){
 		return apply_filters('wt_iew_importer_decimal_columns', array('price','regular_price','_regular_price','sale_price','_sale_price'));             

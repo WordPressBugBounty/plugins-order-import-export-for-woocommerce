@@ -199,12 +199,18 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Export {
 				$wt_iew_date_created_range = trim( $start_date ) . '...' . trim( $end_date );
 			}
 $coupons = !empty($form_data['filter_form_data']['wt_iew_coupons']) ? $form_data['filter_form_data']['wt_iew_coupons'] : array();
-        $orders = !empty($form_data['filter_form_data']['wt_iew_orders']) ? array_filter(explode(',', strtolower($form_data['filter_form_data']['wt_iew_orders'])),'trim') : array();
+        $orders = !empty($form_data['filter_form_data']['wt_iew_orders']) ? array_values(array_filter(array_map('trim', explode(',', strtolower($form_data['filter_form_data']['wt_iew_orders']))))) : array();
 
         $export_limit = !empty($form_data['filter_form_data']['wt_iew_limit']) ? intval($form_data['filter_form_data']['wt_iew_limit']) : 999999999; //user limit
         $current_offset = !empty($form_data['filter_form_data']['wt_iew_offset']) ? intval($form_data['filter_form_data']['wt_iew_offset']) : 0; //user offset
         $export_offset = $current_offset;
-        $batch_count = !empty($form_data['advanced_form_data']['wt_iew_batch_count']) ? $form_data['advanced_form_data']['wt_iew_batch_count'] : Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings('default_export_batch');
+        // Clamp to a sane minimum of 1 — a 0/empty batch count would make the
+        // AJAX loop fire forever (new_offset = offset + 0). Mirrors the guard in
+        // admin/modules/export/export.php so crafted requests or stale templates
+        // bypassing the UI validation still can't produce duplicate rows.
+        $batch_count = !empty($form_data['advanced_form_data']['wt_iew_batch_count'])
+            ? max( 1, (int) $form_data['advanced_form_data']['wt_iew_batch_count'] )
+            : Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::get_advanced_settings('default_export_batch');
 
         $exclude_already_exported = (!empty($form_data['advanced_form_data']['wt_iew_exclude_already_exported']) && ( $form_data['advanced_form_data']['wt_iew_exclude_already_exported'] === 'Yes' || $form_data['advanced_form_data']['wt_iew_exclude_already_exported'] == 1 )) ? true : false;
 
@@ -266,11 +272,12 @@ $coupons = !empty($form_data['filter_form_data']['wt_iew_coupons']) ? $form_data
                 if (!empty($email) && empty($products) && empty($coupons)) {
                     $args = array(
                         'customer_id' => $email,
+                        'status' => $export_order_statuses,
                         'paginate' => true,
                         'return' => 'ids',
                         'limit' => $export_limit, //user given limit,
                         'offset' => $current_offset, //user given offset,
-                    );                                        
+                    );
                     						if ( '' !== $wt_iew_date_created_range ) {
 							$args['date_created'] = $wt_iew_date_created_range;
 						}
@@ -288,12 +295,15 @@ $ord_email = wc_get_orders($args);
                     $ord_coups = self::hf_get_orders_of_coupons($coupons, $export_order_statuses, $export_limit, $current_offset, $end_date, $start_date, $exclude_already_exported);
                     $args = array(
                         'customer_id' => $email,
+                        'status' => $export_order_statuses,
+                        'limit' => -1,
                     						'return' => 'ids',
 						);
                     						if ( '' !== $wt_iew_date_created_range ) {
 							$args['date_created'] = $wt_iew_date_created_range;
 						}
 $ord_email = wc_get_orders($args);
+                    $order_id = array();
                     foreach ($ord_email as $id) {
                         $order_id[] = $id;
                     }
@@ -302,27 +312,33 @@ $ord_email = wc_get_orders($args);
                     $ord_prods = self::hf_get_orders_of_products($products, $export_order_statuses, $export_limit, $current_offset, $end_date, $start_date, $exclude_already_exported);
                     $args = array(
                         'customer_id' => $email,
+                        'status' => $export_order_statuses,
+                        'limit' => -1,
                     						'return' => 'ids',
 						);
                     						if ( '' !== $wt_iew_date_created_range ) {
 							$args['date_created'] = $wt_iew_date_created_range;
 						}
 $ord_email = wc_get_orders($args);
+                    $order_id = array();
                     foreach ($ord_email as $id) {
                         $order_id[] = $id;
-                    }            
+                    }
                     $order_ids = array_intersect($ord_prods, $order_id);
                 } elseif (!empty($coupons) && !empty($products) && !empty($email)) {
                     $ord_prods = self::hf_get_orders_of_products($products, $export_order_statuses, $export_limit, $current_offset, $end_date, $start_date, $exclude_already_exported);
                     $ord_coups = self::hf_get_orders_of_coupons($coupons, $export_order_statuses, $export_limit, $current_offset, $end_date, $start_date, $exclude_already_exported);
                     $args = array(
                         'customer_id' => $email,
+                        'status' => $export_order_statuses,
+                        'limit' => -1,
                        						'return' => 'ids',
 						);
                     						if ( '' !== $wt_iew_date_created_range ) {
 							$args['date_created'] = $wt_iew_date_created_range;
 						}
 $ord_email = wc_get_orders($args);
+                    $order_id = array();
                     foreach ($ord_email as $id) {
                         $order_id[] = $id;
                     }
@@ -530,7 +546,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
 
         foreach ($order->get_fees() as $fee_id => $fee) {
             $fee_items[] = implode('|', array(
-                'name:' . html_entity_decode($fee['name'], ENT_NOQUOTES, 'UTF-8'),
+                'name:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( html_entity_decode($fee['name'], ENT_NOQUOTES, 'UTF-8') ),
                 'total:' . wc_format_decimal($fee['line_total'], 2),
                 'tax:' . wc_format_decimal($fee['line_tax'], 2),
                 'tax_data:' . json_encode($fee['line_tax_data'])
@@ -539,27 +555,35 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             $fee_tax_total += (float) $fee['line_tax'];
         }
 
-        // get tax items
-        foreach ($order->get_tax_totals() as $tax_code => $tax) {
-            $rate_percent = wc_get_order_item_meta( $tax->id, 'rate_percent', true ) ? wc_get_order_item_meta( $tax->id, 'rate_percent', true ):'';
-            $tax_items[] = implode('|', array(
-                'rate_id:' . $tax->rate_id,
-                'code:' . $tax_code,
-                'total:' . wc_format_decimal($tax->amount, 2),
-                'label:' . $tax->label,
-                'tax_rate_compound:' . $tax->is_compound,
-                'rate_percent:'.$rate_percent,
-            ));
+        // Get tax items — iterate the order's tax line items directly so we can
+        // split cart tax from shipping tax per rate. get_tax_totals() only exposes
+        // the combined amount, which lost the shipping-tax portion on import.
+        foreach ( $order->get_items( 'tax' ) as $tax_item_id => $tax_item ) {
+            $rate_percent = wc_get_order_item_meta( $tax_item_id, 'rate_percent', true );
+            $tax_items[] = implode( '|', array(
+                'rate_id:' . $tax_item->get_rate_id(),
+                'code:' . $tax_item->get_rate_code(),
+                'total:' . wc_format_decimal( $tax_item->get_tax_total(), 2 ),
+                'shipping_tax_amount:' . wc_format_decimal( $tax_item->get_shipping_tax_total(), 2 ),
+                'label:' . $tax_item->get_label(),
+                'tax_rate_compound:' . ( $tax_item->is_compound() ? 1 : 0 ),
+                'rate_percent:' . ( '' !== $rate_percent ? $rate_percent : '' ),
+            ) );
         }
 
-		// Add coupons.
+		// Add coupons. Carry discount_tax so the imported coupon line
+		// (discount_amount_tax) matches the source without needing an Update re-import.
 		foreach ($order->get_items('coupon') as $_ => $coupon_item) {
 			$discount_amount = ( version_compare( $version, '4.4.0', '<' ) ) ? $coupon_item['discount_amount'] : $coupon_item->get_discount();
 			$discount_amount = !empty($discount_amount) ? $discount_amount : 0;
 			$coupon_code = ( version_compare( $version, '4.4.0', '<' ) ) ? $coupon_item['name'] : $coupon_item->get_code();
+			$discount_tax = ( version_compare( $version, '4.4.0', '<' ) )
+				? ( isset( $coupon_item['discount_amount_tax'] ) ? $coupon_item['discount_amount_tax'] : 0 )
+				: $coupon_item->get_discount_tax();
 			$coupon_items[] = implode('|', array(
 				'code:' . $coupon_code,
 				'amount:' . wc_format_decimal($discount_amount, 2),
+				'discount_tax:' . wc_format_decimal( $discount_tax, 2 ),
 			));
 		}
 
@@ -574,7 +598,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             } else {
                 $refund_items[] = implode('|', array(
                     'amount:' . $refunded_items->get_amount(),
-                    'reason:' . $refunded_items->get_reason(),
+                    'reason:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( $refunded_items->get_reason() ),
                     'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $refunded_items->get_date_created(), $this->include_timezone_offset ),
                 ));
             }
@@ -597,6 +621,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 'cart_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_cart_discount') ? wc_format_decimal($order->get_cart_discount(), 2) : '0.00'),
                 'order_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_order_discount') ? wc_format_decimal($order->get_order_discount(), 2) : '0.00'),
                 'discount_total' => wc_format_decimal($order->get_discount_total(), 2),
+                'discount_tax' => wc_format_decimal($order->get_discount_tax(), 2),
                 'order_total' => wc_format_decimal($order->get_total(), 2),
                 'order_subtotal' => wc_format_decimal($order->get_subtotal(), 2), // Get order subtotal
 				'order_key' => $order->order_key,
@@ -649,6 +674,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 'order_number' => $order->get_order_number(),
                 'order_date' => $order_date,
                 'paid_date' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $paid_date, $this->include_timezone_offset ),
+                'date_completed' => Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $order->get_date_completed(), $this->include_timezone_offset ),
                 'status' => $order->get_status(),
                 'shipping_total' => $order->get_total_shipping(),
                 'shipping_tax_total' => wc_format_decimal($order->get_shipping_tax(), 2),
@@ -658,6 +684,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 'cart_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_cart_discount') ? wc_format_decimal($order->get_cart_discount(), 2) : '0.00'),
                 'order_discount' => (defined('WC_VERSION') && version_compare(WC_VERSION, '2.3', '>=')) ? wc_format_decimal($order->get_total_discount(), 2) : (method_exists($order, 'get_order_discount') ? wc_format_decimal($order->get_order_discount(), 2) : '0.00'),
                 'discount_total' => wc_format_decimal($order->get_total_discount(), 2),
+                'discount_tax' => wc_format_decimal($order->get_discount_tax(), 2),
                 'order_total' => wc_format_decimal($order->get_total(), 2),
                 'order_subtotal' => wc_format_decimal($order->get_subtotal(), 2), // Get order subtotal
 				'order_key' => $order->get_order_key(),
@@ -847,16 +874,19 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 AND om.meta_value IN (" . implode( ', ', array_fill( 0, count( $products ), '%d' ) ) . ")
                 AND (po.date_created_gmt BETWEEN %s AND %s)";
             $placeholder_values = $products;
-            $placeholder_values[] = $start_date;
-            $placeholder_values[] = $end_date;
+            // HPOS stores UTC in date_created_gmt; convert the local-time bounds
+            // supplied by the UI to GMT so the comparison is apples-to-apples.
+            $placeholder_values[] = get_gmt_from_date( $start_date );
+            $placeholder_values[] = get_gmt_from_date( $end_date );
             if ($export_order_statuses != 'any') {
                 $query .= " AND po.status IN ( " . implode( ', ', array_fill( 0, count( $export_order_statuses ), '%s' ) ) . " )";
                 $placeholder_values = array_merge( $placeholder_values, $export_order_statuses );
             }
 
-            if ($exclude_already_exported) {
-                $query .= " AND pm.meta_key = 'wf_order_exported_status' AND pm.meta_value=1";
-            }
+            // Note: $exclude_already_exported is intentionally NOT applied here —
+            // the caller intersects results with the not-yet-exported list after
+            // this function returns. The old inline filter had inverted semantics
+            // (kept only already-exported orders) and would always empty the set.
 
             if ($retun_count == FALSE) {
                 $query .= ' LIMIT %d' . ( ! empty( $export_offset ) ? ' OFFSET %d' : '' );
@@ -886,9 +916,8 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 $placeholder_values = array_merge( $placeholder_values, $export_order_statuses );
             }
 
-            if ($exclude_already_exported) {
-                $query .= " AND pm.meta_key = 'wf_order_exported_status' AND pm.meta_value=1";
-            }
+            // Note: $exclude_already_exported is intentionally NOT applied here —
+            // see HPOS branch above for the rationale.
 
             if ($retun_count == FALSE) {
                 $query .= ' LIMIT %d' . ( ! empty( $export_offset ) ? ' OFFSET %d' : '' );
@@ -925,8 +954,9 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             AND oi.order_item_name IN (" . implode( ', ', array_fill( 0, count( $coupons ), '%s' ) ) . ")
             AND (po.date_created_gmt BETWEEN %s AND %s)";
             $placeholder_values = $coupons;
-            $placeholder_values[] = $start_date;
-            $placeholder_values[] = $end_date;
+            // HPOS stores UTC; convert local-time bounds from UI to GMT.
+            $placeholder_values[] = get_gmt_from_date( $start_date );
+            $placeholder_values[] = get_gmt_from_date( $end_date );
         if ($export_order_statuses != 'any') {
             $query .= " AND po.status IN ( " . implode( ', ', array_fill( 0, count( $export_order_statuses ), '%s' ) ) . " )";
             $placeholder_values = array_merge( $placeholder_values, $export_order_statuses );
@@ -942,9 +972,8 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
             $query .= " AND po.status IN ( " . implode( ', ', array_fill( 0, count( $stati ), '%s' ) ) . " )";
             $placeholder_values = array_merge( $placeholder_values, $stati );
         }
-        if ($exclude_already_exported) {
-            $query .= " AND pm.meta_key = 'wf_order_exported_status' AND pm.meta_value=1";
-        }
+        // Note: $exclude_already_exported is intentionally NOT applied here —
+        // the caller intersects with the not-yet-exported list after return.
         if ($retun_count == FALSE) {
             $query .= ' LIMIT %d' . ( ! empty( $export_offset ) ? ' OFFSET %d' : '' );
             $placeholder_values[] = intval( $export_limit );
@@ -980,9 +1009,8 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
                 $query .= " AND po.post_status IN ( " . implode( ', ', array_fill( 0, count( $stati ), '%s' ) ) . " )";
                 $placeholder_values = array_merge( $placeholder_values, $stati );
             }
-            if ($exclude_already_exported) {
-                $query .= " AND pm.meta_key = 'wf_order_exported_status' AND pm.meta_value=1";
-            }
+            // Note: $exclude_already_exported is intentionally NOT applied here —
+            // the caller intersects with the not-yet-exported list after return.
             if ($retun_count == FALSE) {
                 $query .= ' LIMIT %d' . ( ! empty( $export_offset ) ? ' OFFSET %d' : '' );
                 $placeholder_values[] = intval( $export_limit );
@@ -1102,7 +1130,7 @@ $query_args = apply_filters('wt_orderimpexpcsv_export_query_args', $query_args);
         $order_notes = array();
         foreach ($notes as $note) {
             $order_notes[] = implode('|', array(
-                'content:' . str_replace(array("\r", "\n"), ' ', $note->content),
+                'content:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::escape_csv_item_value( str_replace(array("\r", "\n"), ' ', $note->content) ),
                 'date:' . Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::format_date_for_export( $note->date_created, $include_offset ),
                 'customer:' . $note->customer_note,
                 'added_by:' . $note->added_by

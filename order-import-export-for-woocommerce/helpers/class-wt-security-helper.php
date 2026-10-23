@@ -191,14 +191,14 @@ if(!class_exists('Wt_Iew_Sh'))
 		*/
 		public static function check_role_access($plugin_id)
 		{
-                $roles = array('manage_options', 'shop_manager'); 
-	    	$roles = apply_filters('wt_'.$plugin_id.'_alter_role_access_basic', $roles); //dynamic filter based on plugin id to alter roles 
+                $roles = array('manage_options', 'shop_manager');
+	    	$roles = apply_filters('wt_'.$plugin_id.'_alter_role_access_basic', $roles); //dynamic filter based on plugin id to alter roles
 	    	$roles = (!is_array($roles) ? array() : $roles);
 	    	$is_allowed = false;
 
 	    	foreach($roles as $role) //loop through roles
 	    	{
-	    		if(current_user_can($role))  
+	    		if(current_user_can($role))
 	    		{
 	    			$is_allowed = true;
 	    			break;
@@ -206,6 +206,55 @@ if(!class_exists('Wt_Iew_Sh'))
 	    	}
 	    	return $is_allowed;
 		}
-		
+
+		/**
+		 * Whether URL imports are restricted to WordPress safe HTTP requests.
+		 *
+		 * Returns true by default so that CSV URL imports use wp_safe_remote_get(),
+		 * which validates the destination against private, loopback, and link-local
+		 * address ranges on every redirect hop.
+		 *
+		 * Sites whose external CSV hosts are unreachable under wp_safe_remote_get()
+		 * (e.g. intranet CDNs, dev environments) can opt out:
+		 *   add_filter( 'wt_iew_url_import_safe_http_only', '__return_false' );
+		 *
+		 * @return bool True when safe HTTP mode is active (default). False to restore legacy behaviour.
+		 */
+		public static function url_import_safe_http_only() {
+			/**
+			 * Force URL imports to use only WordPress safe remote requests.
+			 *
+			 * When true: wp_safe_remote_get() is used with reject_unsafe_urls and
+			 * sslverify enabled. Private/loopback/link-local destinations and HTTP
+			 * redirect targets are rejected, matching WooCommerce's own HTTP posture.
+			 *
+			 * When false: legacy wp_remote_get() behaviour is restored.
+			 *
+			 * @param bool $safe_only Default true.
+			 */
+			return (bool) apply_filters( 'wt_iew_url_import_safe_http_only', true );
+		}
+
+		/**
+		 * Perform a remote GET request using safe or legacy HTTP depending on the site configuration.
+		 *
+		 * When safe mode is active (default), delegates to wp_safe_remote_get() with
+		 * reject_unsafe_urls and sslverify enforced, closing redirect-based SSRF vectors.
+		 * When the opt-out filter is set to false, falls back to wp_remote_get() with the
+		 * caller's original arguments unchanged.
+		 *
+		 * @param string $url  The URL to request.
+		 * @param array  $args wp_remote_get() argument array.
+		 * @return array|WP_Error Response array or WP_Error on failure.
+		 */
+		public static function safe_remote_get( $url, $args = array() ) {
+			if ( self::url_import_safe_http_only() ) {
+				$args['sslverify']          = true;
+				$args['reject_unsafe_urls'] = true;
+				return wp_safe_remote_get( $url, $args );
+			}
+			return wp_remote_get( $url, $args );
+		}
+
 	}
 }

@@ -889,5 +889,14 @@ jQuery(document).ready(function(){
 	wt_iew_file_attacher.Set();
 	wt_iew_form_toggler.Set();
 	wt_field_group.Set();
-        wt_saved_templates.Set();        
+        wt_saved_templates.Set();
+
+	// BFCM 2026 sidebar market cards: Show more / Show less toggle.
+	jQuery(document).on('click', '.wt-ier-market-toggle', function(e){
+		e.preventDefault();
+		var $toggle  = jQuery(this);
+		var $wrapper = $toggle.closest('.wt-import-export-upsell-small-wrapper');
+		var expanded = $wrapper.toggleClass('wt-ier-market-expanded').hasClass('wt-ier-market-expanded');
+		$toggle.text(expanded ? $toggle.data('hide-text') : $toggle.data('show-text'));
+	});
 });

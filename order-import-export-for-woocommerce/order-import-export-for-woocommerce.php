@@ -6,12 +6,12 @@ Plugin URI: https://wordpress.org/plugins/order-import-export-for-woocommerce/
 Description: Export and Import Order detail including line items, From and To your WooCommerce Store.
 Author: WebToffee
 Author URI: https://www.webtoffee.com/product/woocommerce-order-coupon-subscription-export-import/
-Version: 2.7.9
+Version: 2.8.0
 Text Domain: order-import-export-for-woocommerce
 Domain Path: /languages
 Requires at least: 3.0
 Requires PHP: 5.6
-WC tested up to: 11.1.2
+WC tested up to: 11.2.1
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 */
@@ -54,7 +54,7 @@ if ( ! defined( 'WBTE_OIEW_CROSS_PROMO_BANNER_VERSION' ) ) {
  * Start at version 1.0.0 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define( 'WT_O_IEW_VERSION', '2.7.9' );
+define( 'WT_O_IEW_VERSION', '2.8.0' );
 
 /**
  * The code that runs during plugin activation.
@@ -299,6 +299,27 @@ function export_csv_linkin_order_listing_page($which) {
 }
 
 add_filter('manage_posts_extra_tablenav', 'export_csv_linkin_order_listing_page');
+
+/**
+ * Render the Export to CSV link on the HPOS orders list.
+ *
+ * `manage_posts_extra_tablenav` only fires for WP_Posts_List_Table, so when
+ * HPOS is active the orders screen never sees it. This mirrors the legacy
+ * button via WooCommerce's HPOS-specific tablenav action.
+ *
+ * @param string $order_type The order type (e.g. 'shop_order').
+ * @param string $which      'top' or 'bottom'.
+ */
+function wt_iew_export_csv_link_hpos_orders_list( $order_type, $which ) {
+	if ( 'shop_order' !== $order_type || 'top' !== $which ) {
+		return;
+	}
+	if ( is_plugin_active( 'wt-import-export-for-woo/wt-import-export-for-woo.php' ) ) {
+		return;
+	}
+	echo wp_kses_post( '<a target="_blank" href="' . esc_url( admin_url( 'admin.php?page=wt_import_export_for_woo_basic_export&wt_to_export=order' ) ) . '" class="button" style="height:32px;" >' . esc_html__( 'Export to CSV', 'order-import-export-for-woocommerce' ) . ' </a>' );
+}
+add_action( 'woocommerce_order_list_table_extra_tablenav', 'wt_iew_export_csv_link_hpos_orders_list', 10, 2 );
 
 /*
  * Add CSS for Pro Upgrade link in export/import menu

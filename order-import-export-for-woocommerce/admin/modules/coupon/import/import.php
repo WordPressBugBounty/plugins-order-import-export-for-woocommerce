@@ -156,15 +156,17 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Import {
                 $mapping_fields = array_merge($mapping_fields, $value);
             }            
             $item_data = array();
-            $default_data = $this->get_default_data();
 
-            $item_data = $default_data;
-                        
-            if($this->merge && !$this->merge_empty_cells){
-                $item_data = array();
+            // Resolve the merge state for this row first — $this->merge is set
+            // inside wt_parse_id_field() when the coupon exists and found_action
+            // is "update". Only then decide whether to seed defaults: seeding
+            // before this ran would overwrite the existing coupon's status /
+            // discount_type / etc. with the default_data values on merge.
+            $item_data['id'] = $this->wt_parse_id_field($mapping_fields);
+
+            if (!$this->merge) {
+                $item_data = wp_parse_args($item_data, $this->get_default_data());
             }
-            
-            $item_data['id'] = $this->wt_parse_id_field($mapping_fields);  
             
             foreach ($mapping_fields as $column => $value) {
                 if($this->merge && !$this->merge_empty_cells && $value == ''){
@@ -190,11 +192,22 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Import {
                     $item_data['date_created'] = ($value);
                     continue;
                 } 
-                if ('date_expires' == $column ) {    
-                    $offset_base = get_option('gmt_offset', 0);
-                    $offset_extra = ($offset_base <= 0) ? " 12:00:00" : " 00:00:00";
-                    $coupon_expiry_date = (isset($value) && !empty($value) ? strtotime($value.$offset_extra) : ''); //https://stackoverflow.com/a/23659849/1117368
-                    $item_data['date_expires'] = $coupon_expiry_date;
+                if ('date_expires' == $column ) {
+                    $raw = isset( $value ) ? trim( (string) $value ) : '';
+                    if ( '' === $raw ) {
+                        $item_data['date_expires'] = '';
+                        continue;
+                    }
+                    // Parse via the shared helper so the date is interpreted in site
+                    // local time (not UTC) and rollovers like 2025-02-30 or 99:99 are
+                    // rejected instead of being silently normalised by strtotime().
+                    try {
+                        $local_str = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::parse_csv_date_to_local_string( $raw );
+                        $dt        = new \DateTime( $local_str, wp_timezone() );
+                        $item_data['date_expires'] = $dt->getTimestamp();
+                    } catch ( \Exception $e ) {
+                        throw new Exception( sprintf( 'Skipped. Invalid date format %s in column %s.', esc_html( $raw ), esc_html( $column ) ) );
+                    }
                     continue;
                 }
                 if ('discount_type' == $column ) {
@@ -374,9 +387,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Import {
      * @return int|Exception
      */
     public function wt_parse_id_field($data ) {
-        global $wpdb; 
+        global $wpdb;
         $coupon_id = 0;
         $this->is_coupon_exist = false;
+        $this->merge = false;
         
         $id = isset($data['ID']) && !empty($data['ID']) ? absint($data['ID']) : 0;         
         $id_found_with_id = '';

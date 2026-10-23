@@ -44,6 +44,8 @@ $wf_img_path = WT_O_IEW_PLUGIN_URL . 'images/';
         <?php echo esc_html__('automation.', 'order-import-export-for-woocommerce'); ?>
     </p>
 
+    <?php do_action( 'wt_iew_bfcm_inline_render' ); ?>
+
     <div class="wt_content_icon">
         <!-- Image, Title, and Rating in one line -->
         <div class="wt_content_icon_image">

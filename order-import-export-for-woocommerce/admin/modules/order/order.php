@@ -891,7 +891,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order {
 		} else {
 			$post['edit_url'] = get_edit_post_link( $id );
 		}
-		$post['title']    = $id;
+		// Cast to string so JSON encodes it as a string and JS doesn't round
+		// large bigint IDs (>2^53) when parsing it as a Number.
+		$post['title']    = (string) $id;
 		return $post;
     }
      /**

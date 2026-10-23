@@ -75,6 +75,26 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
      */
     private $email_suppression_active = false;
 
+    /**
+     * Snapshot of WC's auto side-effect hooks (stock adjust, total_sales,
+     * coupon_usage) removed during the import batch. The import's own gated
+     * block in process_item() applies stock reduction and sales counting
+     * explicitly and marks the order as counted; letting WC's transition
+     * hooks also fire would double-count. List of records (not a map)
+     * because multiple callbacks can bind to the same hook (e.g. completed →
+     * both wc_maybe_reduce_stock_levels and wc_update_total_sales_counts).
+     *
+     * @var array<int,array{hook:string,callback:callable,priority:int}>
+     */
+    private $stock_hook_snapshot = array();
+
+    /**
+     * True while a suppress_wc_stock_hooks() call is active. Guards re-entrant calls.
+     *
+     * @var bool
+     */
+    private $stock_hook_suppression_active = false;
+
     // Results
     var $import_results = array();
 
@@ -117,6 +137,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         $msg = 'Order imported successfully.';
 
         $this->suppress_wc_emails();
+        $this->suppress_wc_stock_hooks();
 
         try {
             foreach ($import_data as $key => $data) {
@@ -146,6 +167,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
             }
         } finally {
             $this->restore_wc_emails();
+            $this->restore_wc_stock_hooks();
         }
 
         if($is_last_batch && $this->delete_existing){
@@ -288,7 +310,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     continue;
                 }
 
-                if ('post_modified' == $column || 'date_modified' == $column || 'date_completed' == $column || '_completed_date' == $column ) {
+                if ( ( 'post_modified' == $column || 'date_modified' == $column || 'date_completed' == $column || '_completed_date' == $column ) && $value !== '' ) {
                     $parsed_date = $this->wt_parse_date_field( $value, $column );
                     $this->item_data['date_modified'] = $parsed_date;
                     $this->item_data['date_completed'] = $parsed_date;
@@ -314,12 +336,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     continue;
                 }
                 if ('tax_total' == $column ) {
-                    $this->item_data['tax_total'] = wc_format_decimal($value);
+                    $decimal = wc_format_decimal($value);
+                    $this->item_data['tax_total'] = $decimal;
+                    $this->item_data['total_tax'] = $decimal;
                     continue;
                 }
                 if ('cart_discount' == $column ) {
                     $this->item_data['cart_discount'] = wc_format_decimal($value);
-                    $this->item_data['cart_tax'] = wc_format_decimal($value);
                     continue;
                 }
                 if ('order_discount' == $column ) {
@@ -328,13 +351,15 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 }
                 if ('discount_total' == $column ) {
                     $this->item_data['discount_total'] = wc_format_decimal($value);
+                    continue;
+                }
+                if ('discount_tax' == $column ) {
                     $this->item_data['discount_tax'] = wc_format_decimal($value);
                     continue;
-                }            
+                }
                 if ('order_total' == $column ) {
                     $this->item_data['order_total'] = wc_format_decimal($value);
                     $this->item_data['total'] = wc_format_decimal($value);
-                    $this->item_data['total_tax'] = wc_format_decimal($value);
                     continue;
                 }
                 if ('order_key' == $column ) {
@@ -645,16 +670,35 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     continue;                
                 }
 
-            }  
+            }
 
-            if(empty($this->item_data['order_id'])){                                 
+            // Derive cart_tax from tax_total minus shipping tax. WC's total_tax prop
+            // is defined as cart_tax + shipping_tax (fee tax is tracked separately on
+            // fee items and NOT included in the top-level total_tax). Skipped when
+            // tax_total was not provided — merge imports without the column keep the
+            // stored cart_tax.
+            if ( array_key_exists( 'total_tax', $this->item_data ) ) {
+                $shipping_tax = isset( $this->item_data['shipping_tax'] ) ? (float) $this->item_data['shipping_tax'] : 0;
+                $this->item_data['cart_tax'] = wc_format_decimal( max( 0, (float) $this->item_data['total_tax'] - $shipping_tax ) );
+            }
+
+            if(empty($this->item_data['order_id'])){
                 $this->item_data['order_id'] = $this->wt_parse_id_field($mapping_fields,$this->item_data);
-            } 
+            }
             
             if (empty($this->item_data['status'])) {
-                    if ($this->item_data['order_id'] > 0) {
+                    // Only inherit the stored status on a merge/Update import where the
+                    // order already exists. On fresh imports the order_id above was just
+                    // assigned to a placeholder created with post_status='importing' —
+                    // reading it back would persist that invalid status on the real order.
+                    if ($this->merge && $this->is_order_exist && $this->item_data['order_id'] > 0) {
                         $ord = wc_get_order($this->item_data['order_id']);
-                        $this->item_data['status'] = preg_replace('/^wc-/', '', $ord->get_status());
+                        if ($ord) {
+                            $this->item_data['status'] = preg_replace('/^wc-/', '', $ord->get_status());
+                        }
+                    }
+                    if (empty($this->item_data['status'])) {
+                        $this->item_data['status'] = 'pending';
                     }
             }
             return $this->item_data;
@@ -1291,11 +1335,13 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
     public function wt_parse_fee_items_field($value) {
         $fee_items = array();
         if( '' !== $value){
-            $fee_line_items = explode('||', $value);            
+            // Split on unescaped '||' between fee items, then on unescaped '|' within
+            // each item, so a fee name containing '|' or ';' round-trips correctly.
+            $fee_line_items = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_items_on_double_pipe( $value );
             foreach ($fee_line_items as $fee_line_item) {
-                $fee_item_meta = explode('|', $fee_line_item);
+                $fee_item_meta = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_on_unescaped('|', $fee_line_item);
                 $name = array_shift($fee_item_meta);
-                $name = substr($name, strpos($name, ":") + 1);
+                $name = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::unescape_csv_item_value( substr($name, strpos($name, ":") + 1) );
                 $total = array_shift($fee_item_meta);
                 $total = substr($total, strpos($total, ":") + 1);
                 $tax = array_shift($fee_item_meta);
@@ -1412,6 +1458,44 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         return $tax_items;
     }
         
+    /**
+     * Parse a single coupon_items entry (e.g. "code:save10|amount:1.20|discount_tax:0.12")
+     * into an associative array. Tolerant of key order and missing keys so legacy CSVs
+     * (which only wrote code|amount) keep working.
+     *
+     * @param string $value Raw coupon entry string.
+     * @return array{code:string,amount:string,discount_tax:?string}
+     */
+    public static function parse_coupon_item_string( $value ) {
+        $out = array(
+            'code'         => '',
+            'amount'       => '0',
+            'discount_tax' => null,
+        );
+        if ( '' === (string) $value ) {
+            return $out;
+        }
+        foreach ( explode( '|', $value ) as $piece ) {
+            $pos = strpos( $piece, ':' );
+            if ( false === $pos ) {
+                continue;
+            }
+            $key = trim( substr( $piece, 0, $pos ) );
+            $val = trim( substr( $piece, $pos + 1 ) );
+            if ( '' === $key ) {
+                continue;
+            }
+            if ( 'code' === $key ) {
+                $out['code'] = $val;
+            } elseif ( 'amount' === $key ) {
+                $out['amount'] = $val;
+            } elseif ( 'discount_tax' === $key ) {
+                $out['discount_tax'] = $val;
+            }
+        }
+        return $out;
+    }
+
     public function wt_parse_coupon_items_field($value) {
         
         
@@ -1427,20 +1511,22 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
     }
 
     public function wt_parse_refund_items_field($value) {
- 
-        //added since refund not importing 
+
+        //added since refund not importing
         $refund_item = array();
         if(isset($value) && !empty($value)){
-            $refund_item = explode(';', $value);
+            // Split on unescaped ';' so a reason containing ';' doesn't fragment the row.
+            $refund_item = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_on_unescaped(';', $value);
         }
         return $refund_item;
     }
-    
+
     public function wt_parse_order_notes_field($value) {
-         
+
         $order_notes = array();
         if (!empty($value)) {
-            $order_notes = explode("||", $value);
+            // Split on unescaped '||' so a note containing '|' or '||' doesn't fragment.
+            $order_notes = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_items_on_double_pipe($value);
         }
         return $order_notes;
     }
@@ -1690,8 +1776,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
 
         $date = !empty($parsed_data['date_created']) ? $parsed_data['date_created'] : wp_date('Y-m-d H:i:s', time());
         if ( wp_timezone() ) {
-            $local_timezone = wp_timezone(); 
-            $local_time = new DateTime($parsed_data['date_created'], $local_timezone);
+            $local_timezone = wp_timezone();
+            $local_time = new DateTime($date, $local_timezone);
             $gmt_timezone = new DateTimeZone('GMT');
             $local_time->setTimezone($gmt_timezone);
             $gmt_date = $local_time->format('Y-m-d H:i:s');
@@ -1876,23 +1962,20 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
      * @return float|string
      */
     public function wt_parse_status_field($value) {
-        
+
         if (!empty($value)) {
-			
+
             $shop_order_status = $this->wc_get_order_statuses_neat();
 
-            $found_status = false;
-
+            // Match case-insensitively but return the canonical slug so the stored
+            // status is a value WC recognises (e.g. 'Completed' → 'completed').
             foreach ($shop_order_status as $status_slug => $status_name) {
-                if (0 == strcasecmp($status_slug, $value))
-                    $found_status = true;
+                if (0 == strcasecmp($status_slug, $value)) {
+                    return $status_slug;
+                }
             }
 
-            if ($found_status) {
-                return $value;
-            }else{
-                throw new Exception(esc_html(sprintf('Skipped. Unknown order status (%s).', $value)));    
-            }
+            throw new Exception(esc_html(sprintf('Skipped. Unknown order status (%s).', $value)));
         }
 
     }
@@ -1974,7 +2057,17 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
 
             $status = !empty($data['status']) ? $data['status'] : 'wc-pending';
 
-            $order = wc_create_order($data);            
+            // Strip status before handing off to wc_create_order: otherwise its
+            // internal set_status() + save() fires the create-time transition
+            // against defaults (empty totals, no line items yet), which would
+            // auto-reduce stock, auto-fill date_paid/date_completed on the wrong
+            // snapshot, and emit transition notes we'd then have to clean up.
+            // The real status is applied later via $order->set_status() once all
+            // line items and props are in place; its side effects are governed
+            // by suppress_wc_stock_hooks() + the plugin's own stock block.
+            $create_args = $data;
+            $create_args['status'] = null;
+            $order = wc_create_order($create_args);
             if (is_wp_error($order)) {
                 return $order;
             }
@@ -2016,16 +2109,22 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
             }
 			
             $order->set_prices_include_tax( $this->prices_include_tax );
+            // Preserve existing order_key on merge imports that don't carry the column;
+            // regenerating it breaks order-received / pay-for-order links in prior emails.
             if( !empty(  $data['order_key']) ){
 		        $order_key = apply_filters( 'woocommerce_generate_order_key', $data['order_key'] );
-            }else{
+                if ($this->is_hpos_enabled) {
+                    $order->set_order_key( $order_key );
+                } else {
+                    update_post_meta( $order->get_id(), '_order_key', $order_key );
+                }
+            } elseif ( ! ( $this->merge && $this->is_order_exist ) ) {
                 $order_key = apply_filters( 'woocommerce_generate_order_key', uniqid( 'wc_order_' ) );
-            }
-
-            if ($this->is_hpos_enabled) {
-                $order->set_order_key( $order_key );
-            } else {
-                update_post_meta( $order->get_id(), '_order_key', $order_key );
+                if ($this->is_hpos_enabled) {
+                    $order->set_order_key( $order_key );
+                } else {
+                    update_post_meta( $order->get_id(), '_order_key', $order_key );
+                }
             }
             
             // handle order items
@@ -2103,13 +2202,22 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     $order_item_id = wc_add_order_item($order_id, $order_item);
                     if ($order_item_id) {
                         foreach ($order_item_meta[$key] as $meta_key => $meta_value) {
-							if( '_reduced_stock' === $meta_key && $this->update_stock_details ){
-								continue;
-							}
+                            // Never carry the source's _reduced_stock marker:
+                            //   - stock-on: our wc_reduce_stock_levels() call
+                            //     later sets a fresh value matching THIS store's
+                            //     line items; the source value would conflict.
+                            //   - stock-off: nothing on this store took stock,
+                            //     so leaving the marker empty prevents WC's
+                            //     cancel path (wc_maybe_increase_stock_levels)
+                            //     from "restoring" stock that was never taken
+                            //     and silently inflating inventory (IS-978).
+                            if ( '_reduced_stock' === $meta_key ) {
+                                continue;
+                            }
                             wc_add_order_item_meta($order_item_id, $meta_key, $meta_value);
                         }
                     }
-                } 
+                }
             }
 
             $shipping_tax = isset($data['shipping_tax_total'])?$data['shipping_tax_total']:0;
@@ -2257,6 +2365,18 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 }
             }
             
+            // On merge, raw-SQL deletions above leave $order's item caches stale.
+            // Persist the in-memory shipping items added via $order->add_item() and
+            // reload a fresh instance so $order->apply_coupon()'s recalculate_totals
+            // sums the DB state only — otherwise shipping doubles on re-import.
+            if ($this->merge && $this->is_order_exist && !empty($data['coupon_items'])) {
+                $order->save();
+                $reloaded = wc_get_order($order_id);
+                if ($reloaded) {
+                    $order = $reloaded;
+                }
+            }
+
             //importing coupon items
             if (!empty($data['coupon_items'])) {
 
@@ -2271,12 +2391,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     $coupon_item = array();
                     foreach ($data['coupon_items'] as $coupon) {
 
-                        $_citem_meta = explode('|', $coupon);
-                        $coupon_code = array_shift($_citem_meta);
-                        $coupon_code = substr($coupon_code, strpos($coupon_code, ":") + 1);
-
-                        $discount_amount = array_shift($_citem_meta);
-                        $discount_amount = substr($discount_amount, strpos($discount_amount, ":") + 1);
+                        $parts           = self::parse_coupon_item_string( $coupon );
+                        $coupon_code     = $parts['code'];
+                        $discount_amount = $parts['amount'];
+                        $discount_tax    = $parts['discount_tax'];
 
                         if ( isset( $this->coupon_post_id_by_code[ $coupon_code ] ) ) {
                             $cid = $this->coupon_post_id_by_code[ $coupon_code ];
@@ -2301,6 +2419,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                             $coupon_item['order_item_type'] = 'coupon';
                             $order_item_id = wc_add_order_item($order_id, $coupon_item);
                             wc_add_order_item_meta($order_item_id, 'discount_amount', $discount_amount);
+                            if ( null !== $discount_tax ) {
+                                wc_add_order_item_meta( $order_item_id, 'discount_amount_tax', $discount_tax );
+                            }
                         }
                     }
                 } else {
@@ -2323,7 +2444,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                         }
                     }
                     $coupon_item = array();
-                    $order_items_exists = 1 ; // ensuring products in the order is exists in the site before applying coupon, if any one of the product not exist it make error while applying coupon 
+                    $order_items_exists = 1 ; // ensuring products in the order is exists in the site before applying coupon, if any one of the product not exist it make error while applying coupon
                     foreach ( $wc_order_line_items as $item_key => $item_values ) {
                         $line_id = $item_values->get_product_id();
                         if($line_id == 0){
@@ -2333,11 +2454,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                     }
                     if(!$skip_remove_coupon){
                         foreach ($data['coupon_items'] as $coupon) {
-                            $_citem_meta = explode('|', $coupon);
-                            $coupon_code = array_shift($_citem_meta);
-                            $coupon_code = substr($coupon_code, strpos($coupon_code, ":") + 1);
-                            $discount_amount = array_shift($_citem_meta);
-                            $discount_amount = substr($discount_amount, strpos($discount_amount, ":") + 1);
+                            $parts           = self::parse_coupon_item_string( $coupon );
+                            $coupon_code     = $parts['code'];
+                            $discount_amount = $parts['amount'];
+                            $discount_tax    = $parts['discount_tax'];
 
                             if ( isset( $this->coupon_post_id_by_code[ $coupon_code ] ) ) {
                                 $cid = $this->coupon_post_id_by_code[ $coupon_code ];
@@ -2362,6 +2482,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                                 $coupon_item['order_item_type'] = 'coupon';
                                 $order_item_id = wc_add_order_item($order_id, $coupon_item);
                                 wc_add_order_item_meta($order_item_id, 'discount_amount', $discount_amount);
+                                if ( null !== $discount_tax ) {
+                                    wc_add_order_item_meta( $order_item_id, 'discount_amount_tax', $discount_tax );
+                                }
                             }
                         }
                     }
@@ -2371,19 +2494,27 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
             // importing refund items
             if (!empty($data['refund_items'])) {
                 if ($this->merge && $this->is_order_exist) {
-                    $refund = 'shop_order_refund';
-                    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
-                    $wpdb->query($wpdb->prepare("DELETE po,pm FROM $wpdb->posts AS po INNER JOIN $wpdb->postmeta AS pm ON po.ID = pm.post_id WHERE post_parent = %d and post_type = %s", $order_id, $refund));
-                    // phpcs:enable
+                    // Delete existing refunds via WC API so HPOS, legacy and sync
+                    // storage are all cleared (raw post-table deletes miss wc_orders).
+                    $existing_refunds = wc_get_orders(array(
+                        'type'   => 'shop_order_refund',
+                        'parent' => $order_id,
+                        'limit'  => -1,
+                    ));
+                    foreach ($existing_refunds as $existing_refund) {
+                        $existing_refund->delete(true);
+                    }
                 }
                 foreach ($data['refund_items'] as $refund) {
-                    $single_refund = explode('|', $refund);
+                    // Split on unescaped '|' and unescape each key:value chunk so values
+                    // containing '|' or ';' round-trip through CSV correctly.
+                    $single_refund = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_on_unescaped('|', $refund);
                     $amount = array_shift($single_refund);
-                    $amount = substr($amount, strpos($amount, ":") + 1);
+                    $amount = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::unescape_csv_item_value( substr($amount, strpos($amount, ":") + 1) );
                     $reason = array_shift($single_refund);
-                    $reason = substr($reason, strpos($reason, ":") + 1);
+                    $reason = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::unescape_csv_item_value( substr($reason, strpos($reason, ":") + 1) );
                     $date = array_shift($single_refund);
-                    $date = substr($date, strpos($date, ":") + 1);
+                    $date = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::unescape_csv_item_value( substr($date, strpos($date, ":") + 1) );
                     if ( ! empty( $date ) ) {
                         try {
                             $date = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::parse_csv_date_to_local_string( $date );
@@ -2409,22 +2540,58 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
                 $wpdb->query($wpdb->prepare("DELETE comments,meta FROM {$wpdb->prefix}comments comments LEFT JOIN {$wpdb->prefix}commentmeta meta ON comments.comment_ID = meta.comment_id WHERE comments.comment_post_ID = %d",$order_id));
                 // phpcs:enable
-                
-                // Helper function to extract value after colon, safely handling null
+
+                // Compute the exact "Order status changed from X to Y." text
+                // $order->set_status() below will add on its own. If the CSV
+                // carries that same note (round-trip exports typically do),
+                // we skip importing that one so it isn't doubled. Only the
+                // single matching note is skipped — any other historical
+                // status-change notes in the CSV still come through.
+                $target_status_slug  = preg_replace( '/^wc-/', '', $status );
+                $current_status_slug = $order->get_status();
+                // Mirror WC_Abstract_Order::set_status()'s own coercion: if the
+                // in-memory current status isn't a valid registered WC status
+                // (e.g. the plugin's 'importing' placeholder from
+                // wt_parse_id_field), WC treats the transition "from" as
+                // 'pending' when it writes its own note. We must dedup against
+                // that same text, not against the raw placeholder slug.
+                $valid_statuses_prefixed = array_keys( wc_get_order_statuses() );
+                if ( '' !== $current_status_slug
+                    && ! in_array( 'wc-' . $current_status_slug, $valid_statuses_prefixed, true )
+                ) {
+                    $current_status_slug = 'pending';
+                }
+                $auto_status_note = ( '' !== $current_status_slug && $current_status_slug !== $target_status_slug )
+                    ? sprintf(
+                        /* translators: WC core note. 1: old status name, 2: new status name. */
+                        __( 'Order status changed from %1$s to %2$s.', 'woocommerce' ),
+                        wc_get_order_status_name( $current_status_slug ),
+                        wc_get_order_status_name( $target_status_slug )
+                    )
+                    : null;
+
+                // Helper function to extract value after colon, safely handling null,
+                // and unescape delimiters so content containing '|' or ';' round-trips.
                 $extract_value = function($str) {
                     if ( null === $str ) {
                         return '';
                     }
                     $pos = strpos($str, ":");
-                    return (false !== $pos) ? substr($str, $pos + 1) : $str;
+                    $value = (false !== $pos) ? substr($str, $pos + 1) : $str;
+                    return Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::unescape_csv_item_value( $value );
                 };
-                
+
                 foreach ($data['order_notes'] as $order_note) {
-                    $note = explode('|', $order_note);
+                    // Split on unescaped '|' so content containing a '|' isn't fragmented.
+                    $note = Wt_Import_Export_For_Woo_Order_Basic_Common_Helper::split_on_unescaped('|', $order_note);
                     $con = $extract_value( array_shift( $note ) );
-                    $date = $extract_value( array_shift( $note ) ); 
+                    $date = $extract_value( array_shift( $note ) );
                     $cus = $extract_value( array_shift( $note ) );
                     $added_by = $extract_value( array_shift( $note ) );
+                    if ( null !== $auto_status_note && trim( (string) $con ) === $auto_status_note ) {
+                        // set_status() will re-add this exact note; skip to avoid duplicate.
+                        continue;
+                    }
                     if($added_by == 'system'){
                         $added_by_user = FALSE;
                     }else{
@@ -2465,22 +2632,27 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
                 $order->add_order_note(sprintf(__('Original order #%s', 'order-import-export-for-woocommerce'), $data['order_number_formatted']));                
             }
       
-            if($this->status_mail == true){   
-                $order->update_status('wc-' . preg_replace('/^wc-/', '', $status)); 
-            } else {  
-                if($this->is_sync || (!$this->is_sync && $this->table_name == $wpdb->prefix . 'posts') ){
-                    $update_post_table= array(
-                        'ID' => $order_id,
-                        'post_status' => 'wc-' . preg_replace('/^wc-/', '', $status),
-                    );
-                    wp_update_post($update_post_table);
-                }
-                if($this->is_sync || (!$this->is_sync && $this->table_name == $wpdb->prefix . 'wc_orders') ){
-                    $status = 'wc-' . preg_replace('/^wc-/', '', $status);
-                    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Its necessary to use direct database query.
-                    $wpdb->query($wpdb->prepare("UPDATE {$wpdb->prefix}wc_orders SET status = %s WHERE id = %d;", $status, $order_id));
-                    // phpcs:enable
-                }
+            // Apply the final status via set_status() so WC fires transition hooks:
+            // this is what populates date_completed on wc-completed and adds the
+            // "status changed" order note. Side effects WC would otherwise trigger
+            // (transactional emails, auto stock reduce/increase, total_sales and
+            // coupon usage counting) are suppressed for the duration of the batch
+            // via suppress_wc_emails() + suppress_wc_stock_hooks(); the import's
+            // own gated block below applies stock and sales explicitly.
+            $final_status = preg_replace('/^wc-/', '', $status);
+            $order->set_status( $final_status, '', true );
+
+            // WC_Order::maybe_set_date_completed() in WC 11.x unconditionally
+            // overwrites date_completed with time() on every wc-completed
+            // transition (no null check, unlike maybe_set_date_paid()). Re-apply
+            // the CSV-provided value afterward so a user-supplied Completed date
+            // survives. Same guard for date_paid in case a future WC release
+            // mirrors the override behavior.
+            if ( ! empty( $data['date_completed'] ) ) {
+                $order->set_date_completed( $data['date_completed'] );
+            }
+            if ( ! empty( $data['date_paid'] ) ) {
+                $order->set_date_paid( $data['date_paid'] );
             }
             
                
@@ -2507,16 +2679,67 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
 
 			$should_update_stock = $this->update_stock_details && ( ! $this->merge || $update_for_existing_order );
 			if ( $should_update_stock ) {
-				$donot_reduce_statuses = apply_filters( 'wt_iew_order_import_donot_reduce_statuses', array( 'refunded', 'cancelled', 'failed' ) );
+				// 'pending' matches WC: wc_maybe_reduce_stock_levels only fires
+				// on processing/completed/on-hold transitions, so a pending
+				// order never had its stock reduced natively.
+				$donot_reduce_statuses = apply_filters( 'wt_iew_order_import_donot_reduce_statuses', array( 'pending', 'refunded', 'cancelled', 'failed' ) );
 				if (!in_array($order->get_status(), $donot_reduce_statuses)) {
 					wc_reduce_stock_levels($order->get_id());
-					if (count($order->get_items()) > 0) {
-						foreach ($order->get_items() as $item) {
-							$product_id = $item->get_product_id();
-							if ($product_id) {
-								$data_store = WC_Data_Store::load('product');
-								$data_store->update_product_sales($product_id, absint($item->get_quantity()), 'increase');
+					// Reload the order: $order was built by wc_create_order()
+					// and populated with items via direct wc_add_order_item()
+					// writes (around line 2202), which never populate the
+					// in-memory items cache on the original object. Iterating
+					// $order->get_items() on the stale instance returned
+					// empty, so update_product_sales() was never called and
+					// _recorded_sales stayed unset.
+					$fresh_order = wc_get_order( $order->get_id() );
+					if ( $fresh_order ) {
+						// Mark the order's _order_stock_reduced flag so WC's
+						// wc_maybe_increase_stock_levels will restore stock if
+						// the order is later cancelled/refunded via the normal
+						// WC admin flow. wc_reduce_stock_levels() itself only
+						// sets _reduced_stock on each line item; the order-
+						// level flag is set by wc_maybe_reduce_stock_levels
+						// (which we suppress during import). Without this,
+						// cancellations on imported orders would silently skip
+						// stock restoration.
+						$order_data_store = $fresh_order->get_data_store();
+						$order_data_store->set_stock_reduced( $fresh_order->get_id(), true );
+						$line_items = $fresh_order->get_items();
+						if ( ! empty( $line_items ) ) {
+							$product_data_store = WC_Data_Store::load( 'product' );
+							foreach ( $line_items as $item ) {
+								$product_id = $item->get_product_id();
+								if ( $product_id ) {
+									$product_data_store->update_product_sales( $product_id, absint( $item->get_quantity() ), 'increase' );
+								}
 							}
+						}
+						// Mark sales as already counted. total_sales was just
+						// incremented via update_product_sales() above; without
+						// _recorded_sales = yes, wc_update_total_sales_counts()
+						// would increment again on the next completed/processing
+						// transition. The matching cancel path writes to the
+						// same product total_sales row with the same quantity,
+						// so the flag stays symmetric.
+						//
+						// has_callable() instead of method_exists(): $order's
+						// data store is a WC_Data_Store wrapper that forwards
+						// unknown calls via __call() but does not define the
+						// methods on itself, so method_exists() always returns
+						// false. See WC_Data_Store::has_callable().
+						//
+						// Deliberately NOT setting _recorded_coupon_usage_counts
+						// here: the import does not call
+						// $coupon->increase_usage_count() (preserving the
+						// "import doesn't inflate coupon usage" semantic).
+						// Marking the flag anyway would cause WC's cancel path
+						// to run a raw UPDATE meta_value = meta_value - 1 on
+						// the coupon's usage_count — unclamped, so repeated
+						// cancellations of imported orders would drive
+						// usage_count negative.
+						if ( $order_data_store->has_callable( 'set_recorded_sales' ) ) {
+							$order_data_store->set_recorded_sales( $fresh_order, true );
 						}
 					}
 				}
@@ -2684,10 +2907,30 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         if (isset($data['meta_data'])) {
             $order_id = $object->get_id();
             $add_download_permissions = false;
-            foreach ($data['meta_data'] as $meta) {                                                
+            // Lifecycle-counting flags that WC maintains and this plugin's
+            // own stock/sales block manages explicitly (set only when the
+            // import actually reduces stock or counts sales). Letting the
+            // source's values flow through would leave the imported order
+            // marked as if THIS store had already reduced stock / counted
+            // sales / counted coupon usage — so a later admin status change
+            // would re-fire WC's inverse logic against transactions that
+            // never happened on this store: wc_maybe_increase_stock_levels
+            // restoring un-taken stock (IS-978), wc_update_total_sales_counts
+            // decrementing un-counted sales, and wc_update_coupon_usage_counts
+            // running an unclamped UPDATE … meta_value - 1 that drives the
+            // coupon's usage_count negative.
+            $lifecycle_counting_keys = array(
+                '_order_stock_reduced',
+                '_recorded_sales',
+                '_recorded_coupon_usage_counts',
+            );
+            foreach ($data['meta_data'] as $meta) {
+                if ( in_array( $meta['key'], $lifecycle_counting_keys, true ) ) {
+                    continue;
+                }
                 if (( 'Download Permissions Granted' == $meta['key'] || '_download_permissions_granted' == $meta['key'] ) && $meta['value']) {
                     $add_download_permissions = true;
-                }   
+                }
                 if('_wt_import_key' == $meta['key']){
                     $object->update_meta_data('_wt_import_key', apply_filters('wt_importing_order_reference_key', $meta['value'], $data)); // for future reference, this holds the order number which in the csv.
                     continue;
@@ -2823,6 +3066,93 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Import {
         remove_filter( 'woocommerce_allow_send_queued_transactional_email', '__return_false' );
 
         $this->email_suppression_active = false;
+    }
+
+    /**
+     * Remove WC's auto side-effect actions on status transition for the duration
+     * of the import batch.
+     *
+     * The import applies the final order status via $order->set_status(), which
+     * fires woocommerce_order_status_{processing|completed|on-hold|cancelled|
+     * pending|failed|refunded}. WC auto-attaches:
+     *   - wc_maybe_reduce_stock_levels / wc_maybe_increase_stock_levels — the
+     *     import's gated block in process_item() handles stock itself, so
+     *     letting WC adjust again would double-count.
+     *   - wc_update_total_sales_counts — the gated block increments product
+     *     total_sales directly and marks _recorded_sales, so letting WC also
+     *     fire would re-count.
+     *   - wc_update_coupon_usage_counts — the import does not inflate coupon
+     *     usage_count. The _recorded_coupon_usage_counts flag is intentionally
+     *     left unset: setting it without a matching increase_usage_count()
+     *     would make WC's cancel path drive the coupon's usage_count negative
+     *     (raw meta_value - 1 with no clamp). Trade-off: a later admin
+     *     transition to processing/completed/on-hold will belatedly increment
+     *     usage_count once, which is acceptable (and symmetric with cancel).
+     *
+     * The attached callback list is pulled from WC source at
+     * wc-stock-functions.php and wc-order-functions.php. Restore in
+     * restore_wc_stock_hooks().
+     */
+    private function suppress_wc_stock_hooks() {
+        if ( $this->stock_hook_suppression_active ) {
+            return;
+        }
+        $this->stock_hook_suppression_active = true;
+
+        // Each entry: array( <hook>, <callback> ).
+        $hook_pairs = array(
+            // Stock adjustments.
+            array( 'woocommerce_order_status_processing', 'wc_maybe_reduce_stock_levels' ),
+            array( 'woocommerce_order_status_completed',  'wc_maybe_reduce_stock_levels' ),
+            array( 'woocommerce_order_status_on-hold',    'wc_maybe_reduce_stock_levels' ),
+            array( 'woocommerce_order_status_cancelled',  'wc_maybe_increase_stock_levels' ),
+            array( 'woocommerce_order_status_pending',    'wc_maybe_increase_stock_levels' ),
+            array( 'woocommerce_order_status_failed',     'wc_maybe_increase_stock_levels' ),
+            array( 'woocommerce_order_status_refunded',   'wc_maybe_increase_stock_levels' ),
+            // Total sales count (wc-order-functions.php:1004-1012 in WC 11.x).
+            array( 'woocommerce_order_status_completed',               'wc_update_total_sales_counts' ),
+            array( 'woocommerce_order_status_processing',              'wc_update_total_sales_counts' ),
+            array( 'woocommerce_order_status_on-hold',                 'wc_update_total_sales_counts' ),
+            array( 'woocommerce_order_status_completed_to_cancelled',  'wc_update_total_sales_counts' ),
+            array( 'woocommerce_order_status_processing_to_cancelled', 'wc_update_total_sales_counts' ),
+            array( 'woocommerce_order_status_on-hold_to_cancelled',    'wc_update_total_sales_counts' ),
+            // Coupon usage count (wc-order-functions.php:1080-1085 in WC 11.x).
+            array( 'woocommerce_order_status_pending',    'wc_update_coupon_usage_counts' ),
+            array( 'woocommerce_order_status_completed',  'wc_update_coupon_usage_counts' ),
+            array( 'woocommerce_order_status_processing', 'wc_update_coupon_usage_counts' ),
+            array( 'woocommerce_order_status_on-hold',    'wc_update_coupon_usage_counts' ),
+            array( 'woocommerce_order_status_cancelled',  'wc_update_coupon_usage_counts' ),
+            array( 'woocommerce_order_status_failed',     'wc_update_coupon_usage_counts' ),
+        );
+
+        $this->stock_hook_snapshot = array();
+        foreach ( $hook_pairs as $pair ) {
+            list( $hook, $callback ) = $pair;
+            $priority = has_action( $hook, $callback );
+            if ( false !== $priority ) {
+                $this->stock_hook_snapshot[] = array(
+                    'hook'     => $hook,
+                    'callback' => $callback,
+                    'priority' => (int) $priority,
+                );
+                remove_action( $hook, $callback, (int) $priority );
+            }
+        }
+    }
+
+    /**
+     * Restore WC's auto side-effect actions removed by suppress_wc_stock_hooks().
+     * Safe to call unconditionally; no-op when suppression was not active.
+     */
+    private function restore_wc_stock_hooks() {
+        if ( ! $this->stock_hook_suppression_active ) {
+            return;
+        }
+        foreach ( $this->stock_hook_snapshot as $record ) {
+            add_action( $record['hook'], $record['callback'], $record['priority'], 10 );
+        }
+        $this->stock_hook_snapshot = array();
+        $this->stock_hook_suppression_active = false;
     }
 
     /**

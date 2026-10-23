@@ -182,7 +182,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 			'field_name'=>'default_export_batch',
 			'help_text'=>__('Provide the default count for the records to be exported in a batch.', 'order-import-export-for-woocommerce'),
 			'validation_rule'=>array('type'=>'absint'),
-			'attr' => array('min' => 1, 'max' => 200, 'step' => 1),
+			'attr' => array('min' => 1, 'max' => 200, 'step' => 1, 'required' => 'required'),
 		);
 		if(is_plugin_active('product-import-export-for-woo/product-import-export-for-woo.php')){
             $fields['enable_chatgpt'] = array(
@@ -410,7 +410,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 				// translators: %d: number of records
 				'help_text'=>sprintf(__('The number of records that the server will process for every iteration within the configured timeout interval. If the export fails due to timeout you can lower this number accordingly and try again. Defaulted to %d records.', 'order-import-export-for-woocommerce'), 30),
 				'validation_rule'=>array('type'=>'absint'),
-				'attr' => array('min' => 1, 'step' => 1),
+				'attr' => array('min' => 1, 'step' => 1, 'required' => 'required'),
 			),
 			'delimiter'=>array(
 				'label'=>__( 'Delimiter' , 'order-import-export-for-woocommerce'),
@@ -467,7 +467,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 				$history_data=$history_module_obj->get_history_entry_by_id($rerun_id);
 				if($history_data && $history_data['template_type']==$this->module_base)
 				{
-					$form_data_raw = wp_unslash($history_data['data']);
+					// Don't wp_unslash: the DB column is stored as pure JSON — stripping
+					// backslashes here breaks json_decode when any string contains escaped quotes.
+					$form_data_raw = $history_data['data'];
 					$form_data = is_array($form_data_raw) ? 
 							array_map(function($item) {
 								return is_string($item) ? json_decode($item, true) : $item;
@@ -710,6 +712,9 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 		if(isset($form_data['advanced_form_data']))
 		{
 			$batch_count=(isset($form_data['advanced_form_data']['wt_iew_batch_count']) ? $form_data['advanced_form_data']['wt_iew_batch_count'] : $batch_count);
+			// Guard against 0/empty/non-numeric batch sizes — new_offset would stay
+			// at $offset below and the AJAX loop would fire forever.
+			$batch_count = max( 1, (int) $batch_count );
 			$file_as=(isset($form_data['advanced_form_data']['wt_iew_file_as']) ? $form_data['advanced_form_data']['wt_iew_file_as'] : 'csv');
 			$csv_delimiter=(isset($form_data['advanced_form_data']['wt_iew_delimiter']) ? $form_data['advanced_form_data']['wt_iew_delimiter'] : ',');
 			$csv_delimiter=($csv_delimiter=="" ? ',' : $csv_delimiter);
@@ -1011,7 +1016,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Export
 		$default_batch_count=absint(apply_filters('wt_iew_exporter_alter_default_batch_count_basic', $this->default_batch_count, $this->to_export, $form_data));
 		$form_data=null;
 		unset($form_data);
-		return ($default_batch_count==0 ? $this->default_batch_count : $default_batch_count);
+		// Fall back to stored setting if filter returned 0; then clamp to >=1 so a
+		// blank-and-saved default setting can never produce a zero batch size.
+		$default_batch_count = ($default_batch_count == 0 ? (int) $this->default_batch_count : $default_batch_count);
+		return max( 1, $default_batch_count );
 	}
 
 	/**

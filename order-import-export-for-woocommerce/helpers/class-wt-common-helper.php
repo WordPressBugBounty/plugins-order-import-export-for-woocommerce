@@ -418,6 +418,52 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
 		return $local->format( 'Y-m-d H:i:s O' );
 	}
 
+	/**
+	 * Escape delimiters used by order-import CSV item fields so values containing
+	 * `|`, `;` or `\` survive the round-trip to import. Must be paired with
+	 * unescape_csv_item_value() on the import side.
+	 */
+	public static function escape_csv_item_value( $value ) {
+		if ( null === $value || '' === $value ) {
+			return '';
+		}
+		return str_replace( array( '\\', '|', ';' ), array( '\\\\', '\\|', '\\;' ), (string) $value );
+	}
+
+	/**
+	 * Reverse of escape_csv_item_value(). Applied to the raw substring recovered
+	 * after splitting an item on its (unescaped) delimiter.
+	 */
+	public static function unescape_csv_item_value( $value ) {
+		if ( null === $value || '' === $value ) {
+			return '';
+		}
+		return str_replace( array( '\\;', '\\|', '\\\\' ), array( ';', '|', '\\' ), (string) $value );
+	}
+
+	/**
+	 * Split a string on the given single-character delimiter, honoring the
+	 * backslash-escape produced by escape_csv_item_value(). Multi-character
+	 * delimiters (e.g. '||') are handled by split_items_on_double_pipe().
+	 */
+	public static function split_on_unescaped( $delimiter, $value ) {
+		if ( null === $value || '' === $value ) {
+			return array();
+		}
+		$pattern = '/(?<!\\\\)' . preg_quote( $delimiter, '/' ) . '/';
+		return preg_split( $pattern, (string) $value );
+	}
+
+	/**
+	 * Split on an unescaped literal '||' separator (used between order notes).
+	 */
+	public static function split_items_on_double_pipe( $value ) {
+		if ( null === $value || '' === $value ) {
+			return array();
+		}
+		return preg_split( '/(?<!\\\\)\|\|/', (string) $value );
+	}
+
 	public static function format_date_for_export( $wc_datetime, $include_offset = false ) {
 		if ( ! $wc_datetime instanceof \WC_DateTime ) {
 			return '';
@@ -464,21 +510,20 @@ class Wt_Import_Export_For_Woo_Order_Basic_Common_Helper
 			$value = str_replace( '/', '-', $value );
 		}
 
-		if ( self::csv_date_has_timezone( $value ) ) {
-			try {
-				$dt = new \DateTime( $value );
-			} catch ( \Exception $e ) {
-				throw new \Exception( 'Invalid date format.' );
-			}
-			$dt->setTimezone( wp_timezone() );
-			return $dt->format( 'Y-m-d H:i:s' );
-		}
-
+		$has_timezone = self::csv_date_has_timezone( $value );
 		try {
-			$dt = wc_string_to_datetime( $value );
+			$dt = $has_timezone ? new \DateTime( $value ) : new \DateTime( $value, wp_timezone() );
 		} catch ( \Exception $e ) {
 			throw new \Exception( 'Invalid date format.' );
 		}
+
+		// Reject silent rollovers like 2025-02-30 → 2025-03-02 or 99:99 minutes.
+		$errors = \DateTime::getLastErrors();
+		if ( is_array( $errors ) && ( ! empty( $errors['warning_count'] ) || ! empty( $errors['error_count'] ) ) ) {
+			throw new \Exception( 'Invalid date format.' );
+		}
+
+		$dt->setTimezone( wp_timezone() );
 		return $dt->format( 'Y-m-d H:i:s' );
 	}
 

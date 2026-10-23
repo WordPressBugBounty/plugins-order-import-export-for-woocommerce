@@ -1,6 +1,6 @@
 <?php
 /**
- * BFCM 2025 Banner.
+ * BFCM 2026 Banner.
  *
  * @package Wt_Smart_Coupon
  */
@@ -9,28 +9,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
+if ( ! class_exists( 'Wt_Iew_Bfcm_Twenty_Twenty_Six' ) ) {
 
 	/**
-	 * Class Wt_Bfcm_Twenty_Twenty_Five
+	 * Class Wt_Iew_Bfcm_Twenty_Twenty_Six
 	 *
-	 * This class is responsible for displaying and handling the Black Friday and Cyber Monday CTA banners for 2025.
+	 * This class is responsible for displaying and handling the Black Friday and Cyber Monday CTA banners for 2026.
 	 */
-	class Wt_Bfcm_Twenty_Twenty_Five {
+	class Wt_Iew_Bfcm_Twenty_Twenty_Six {
 
 		/**
 		 * Banner id.
 		 *
 		 * @var string
 		 */
-		private $banner_id = 'wt-bfcm-twenty-twenty-five';
+		private $banner_id = 'wt-iew-bfcm-twenty-twenty-six';
 
 		/**
 		 * Banner state option name.
 		 *
 		 * @var string
 		 */
-		private static $banner_state_option_name = 'wt_bfcm_twenty_twenty_five_banner_state'; // Banner state, 1: Show, 2: Closed by user, 3: Clicked the grab button.
+		private static $banner_state_option_name = 'wt_iew_bfcm_twenty_twenty_six_banner_state'; // Banner state, 1: Show, 2: Closed by user, 3: Clicked the grab button, 4: Campaign expired.
 
 		/**
 		 * Banner state.
@@ -51,14 +51,14 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 		 *
 		 * @var string
 		 */
-		private static $ajax_action_name = 'wt_bcfm_twenty_twenty_five_banner_state';
+		private static $ajax_action_name = 'wt_iew_bfcm_twenty_twenty_six_banner_state';
 
 		/**
 		 * Promotion link.
 		 *
 		 * @var string
 		 */
-		private static $promotion_link = 'https://www.webtoffee.com/plugins/?utm_source=BFCM_promotion&utm_medium=Recommendations&utm_campaign=BFCM-Promotion';
+		private static $promotion_link = 'https://www.webtoffee.com/plugins/?utm_source=BFCM_administration&utm_medium=import_export&utm_campaign=BFCM-Administration';
 
 		/**
 		 * Banner version.
@@ -82,6 +82,9 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 			// Add banner.
             add_action('admin_notices', array($this, 'show_banner'), 999);
 
+			// Inline hook — scheduled view fires this after its intro paragraph so the banner renders in-flow (not above the heading).
+			add_action( 'wt_iew_bfcm_inline_render', array( $this, 'show_banner' ), 999 );
+
 			// Ajax hook to save banner state.
 			add_action( 'wp_ajax_' . self::$ajax_action_name, array( $this, 'update_banner_state' ) );
 
@@ -96,15 +99,15 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 		 * To add the banner styles
 		 */
 		public function enqueue_styles_and_scripts() {
-			wp_enqueue_style( $this->banner_id . '-css', plugin_dir_url( __FILE__ ) . 'assets/css/wt-bfcm-twenty-twenty-five.css', array(), self::$banner_version, 'all' );
+			wp_enqueue_style( $this->banner_id . '-css', plugin_dir_url( __FILE__ ) . 'assets/css/wt-iew-bfcm-twenty-twenty-six.css', array(), self::$banner_version, 'all' );
 			$params = array(
 				'ajax_url' => esc_url_raw( admin_url( 'admin-ajax.php' ) ),
-				'nonce'    => wp_create_nonce( 'wt_bfcm_twenty_twenty_five_banner_nonce' ),
+				'nonce'    => wp_create_nonce( 'wt_iew_bfcm_twenty_twenty_six_banner_nonce' ),
 				'action'   => self::$ajax_action_name,
 				'cta_link' => self::$promotion_link,
 			);
-			wp_enqueue_script( $this->banner_id . '-js', plugin_dir_url( __FILE__ ) . 'assets/js/wt-bfcm-twenty-twenty-five.js', array( 'jquery' ), self::$banner_version, false );
-			wp_localize_script( $this->banner_id . '-js', 'wt_bfcm_twenty_twenty_five_banner_js_params', $params );
+			wp_enqueue_script( $this->banner_id . '-js', plugin_dir_url( __FILE__ ) . 'assets/js/wt-iew-bfcm-twenty-twenty-six.js', array( 'jquery' ), self::$banner_version, false );
+			wp_localize_script( $this->banner_id . '-js', 'wt_iew_bfcm_twenty_twenty_six_banner_js_params', $params );
 		}
 
 		public function show_smart_coupon_BFCM_sbanner()
@@ -160,7 +163,7 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 									data: {
 										action: 'wbte_sc_hide_promotion_banner',
 										banner_id: banner_id,
-										_wpnonce: '<?php echo esc_js( wp_create_nonce( 'wt_bfcm_twenty_twenty_five_banner_nonce' ) ); ?>'
+										_wpnonce: '<?php echo esc_js( wp_create_nonce( 'wt_iew_bfcm_twenty_twenty_six_banner_nonce' ) ); ?>'
 									},
 									success: function(response) {
 										banner_div.fadeOut(300, function() {
@@ -190,14 +193,25 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 
 		/**
 		 * Show the banner.
+		 *
+		 * Suppresses the admin_notices rendering on the scheduled-job screen; that screen fires
+		 * `wt_iew_bfcm_inline_render` after its intro paragraph so the banner lands in-flow instead
+		 * of above the H2 heading.
 		 */
 		public function show_banner() {
 			if ( $this->is_show_banner() ) {
+				$screen    = get_current_screen();
+				$screen_id = $screen ? $screen->id : '';
+
+				if ( 'admin_notices' === current_action()
+					&& 'webtoffee-import-export-basic_page_wt_iew_scheduled_job' === $screen_id ) {
+					return;
+				}
 				?>
-					<div class="wt-bfcm-banner-2025 notice is-dismissible">
+					<div class="wt-iew-bfcm-banner-2026 notice is-dismissible inline">
 						<div class="wt-bfcm-banner-body">
 							<div class="wt-bfcm-banner-body-img-section">
-								<img src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . 'assets/images/black-friday-2025.svg' ); ?>" alt="<?php esc_attr_e( 'Black Friday Cyber Monday 2025', 'order-import-export-for-woocommerce' ); ?>">
+								<img src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . 'assets/images/black-friday-2026.svg' ); ?>" alt="<?php esc_attr_e( 'Black Friday Cyber Monday 2026', 'order-import-export-for-woocommerce' ); ?>">
 							</div>
 							<div class="wt-bfcm-banner-body-info">
 								<div class="wt-bfcm-never-miss-this-deal">
@@ -208,7 +222,7 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 									<?php
 										printf(
 											// translators: 1: Discount text with span wrapper, e.g. <span>30% OFF</span>.
-											esc_html__( 'Your Last Chance to Avail %1$s on WebToffee Plugins. Grab the deal before it`s gone!', 'order-import-export-for-woocommerce' ),
+											esc_html__( 'Your Last Chance to Avail %1$s on WebToffee Plugins. Grab the deal before it\'s gone!', 'order-import-export-for-woocommerce' ),
 											'<span>30% ' . esc_html__( 'OFF', 'order-import-export-for-woocommerce' ) . '</span>'
 										);
 									?>
@@ -231,20 +245,26 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 		 */
 		public function is_show_banner() {
 
-			// Check if the current date is less than the start date then wait for the start date.
-			if ( ! class_exists( 'Wt_Import_Export_For_Woo_Order_Basic' ) || ! method_exists( 'Wt_Import_Export_For_Woo_Order_Basic', 'is_bfcm_season' ) || ! Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season() ) {
-				return self::$show_banner = false;
-			}
-
-			// Already checked.
+			// Already checked for this request.
 			if ( ! is_null( self::$show_banner ) ) {
 				return self::$show_banner;
 			}
 
-			// Check current banner state.
+			// Banner permanently hidden (closed by user, grabbed, or campaign expired).
 			if ( 1 !== $this->banner_state ) {
-				self::$show_banner = false;
-				return self::$show_banner;
+				return self::$show_banner = false;
+			}
+
+			// Season window gate.
+			if ( ! class_exists( 'Wt_Import_Export_For_Woo_Order_Basic' ) || ! method_exists( 'Wt_Import_Export_For_Woo_Order_Basic', 'is_bfcm_season' ) || ! Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season() ) {
+
+				// Mark as expired once the campaign window has ended so later requests skip the date check.
+				// Only writes 4 after the end date — never before the start — to avoid pre-silencing the banner.
+				if ( method_exists( 'Wt_Import_Export_For_Woo_Order_Basic', 'is_bfcm_season_ended' ) && Wt_Import_Export_For_Woo_Order_Basic::is_bfcm_season_ended() && 4 !== $this->banner_state ) {
+					update_option( self::$banner_state_option_name, 4 );
+					$this->banner_state = 4;
+				}
+				return self::$show_banner = false;
 			}
 
 			// Check screens.
@@ -252,7 +272,7 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
 			$screen_id = $screen ? $screen->id : '';
 
 			/**
-			 *  Pages to show this black friday and cyber monday banner for 2025.
+			 *  Pages to show this black friday and cyber monday banner for 2026.
 			 *
 			 *  @since 1.1.0
 			 *  @param  string[]    Default screen ids
@@ -267,11 +287,11 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
          *  Update banner state ajax hook
          */
         public function update_banner_state() {
-            check_ajax_referer( 'wt_bfcm_twenty_twenty_five_banner_nonce' );
- 
-			if ( isset( $_POST['wt_bfcm_twenty_twenty_five_banner_action_type'] ) ) {
+            check_ajax_referer( 'wt_iew_bfcm_twenty_twenty_six_banner_nonce' );
 
-				$action_type = absint( sanitize_text_field( wp_unslash( $_POST['wt_bfcm_twenty_twenty_five_banner_action_type'] ) ) );
+			if ( isset( $_POST['wt_iew_bfcm_twenty_twenty_six_banner_action_type'] ) ) {
+
+				$action_type = absint( sanitize_text_field( wp_unslash( $_POST['wt_iew_bfcm_twenty_twenty_six_banner_action_type'] ) ) );
 				if ( in_array( $action_type, array( 2, 3 ), true ) ) {
 					update_option( self::$banner_state_option_name, $action_type );
 				}
@@ -285,7 +305,7 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
          *  @since 2.5.8
          */
         public function hide_smart_coupon_promotion_banner() {
-            check_ajax_referer( 'wt_bfcm_twenty_twenty_five_banner_nonce', '_wpnonce' );
+            check_ajax_referer( 'wt_iew_bfcm_twenty_twenty_six_banner_nonce', '_wpnonce' );
 
                 $hided_banners   = get_option( 'wbte_sc_hidden_promotion_banners', array() );
                 $hided_banners[] = isset( $_POST['banner_id'] ) ? sanitize_text_field( wp_unslash( $_POST['banner_id'] ) ) : '';
@@ -294,5 +314,5 @@ if ( ! class_exists( 'Wt_Bfcm_Twenty_Twenty_Five' ) ) {
             }
         }
 
-	new Wt_Bfcm_Twenty_Twenty_Five();
+	new Wt_Iew_Bfcm_Twenty_Twenty_Six();
 }

@@ -37,7 +37,11 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Export {
         $export_sort_order = !empty($form_data['filter_form_data']['wt_iew_order_by']) ? $form_data['filter_form_data']['wt_iew_order_by'] : 'ASC';
         $export_limit = !empty($form_data['filter_form_data']['wt_iew_limit']) ? intval($form_data['filter_form_data']['wt_iew_limit']) : 999999999; //user limit
         $current_offset = !empty($form_data['filter_form_data']['wt_iew_offset']) ? intval($form_data['filter_form_data']['wt_iew_offset']) : 0; //user offset        
-        $batch_count = !empty($form_data['advanced_form_data']['wt_iew_batch_count']) ? $form_data['advanced_form_data']['wt_iew_batch_count'] : 10;
+        // Clamp to a sane minimum of 1 — a 0/empty batch count would make the
+        // AJAX loop fire forever. Mirrors the guard in admin/modules/export/export.php.
+        $batch_count = !empty($form_data['advanced_form_data']['wt_iew_batch_count'])
+            ? max( 1, (int) $form_data['advanced_form_data']['wt_iew_batch_count'] )
+            : 10;
                 
         $this->export_shortcodes = (!empty($form_data['advanced_form_data']['wt_iew_export_shortcode_tohtml']) && $form_data['advanced_form_data']['wt_iew_export_shortcode_tohtml'] == 'Yes') ? true : false;
         
@@ -62,76 +66,73 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Export {
         {            
             $coupon_args = array(
                 'post_status' => $export_statuses,
-                'post_type' => 'shop_coupon',                
+                'post_type' => 'shop_coupon',
                 'order' => $export_sort_order,
                 'orderby' => $export_sortby,
-                    );
+                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
+                'meta_query' => array( 'relation' => 'AND' ),
+            );
 
             if (!empty($cpn_categories)) {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'discount_type',
-                        'value' => $cpn_categories,
-                        'compare' => 'IN',
-                ));
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'discount_type',
+                    'value' => $cpn_categories,
+                    'compare' => 'IN',
+                );
             }
+            $amount_cast = 'DECIMAL(20,' . absint( wc_get_price_decimals() ) . ')';
             if ($coupon_amount_from != 0 && $coupon_amount_to == 0) {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'coupon_amount',
-                        'value' => $coupon_amount_from,
-                        'compare' => '>=',
-                        'type' => 'NUMERIC'
-                ));
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'coupon_amount',
+                    'value' => $coupon_amount_from,
+                    'compare' => '>=',
+                    'type' => $amount_cast,
+                );
             }
             if ($coupon_amount_to != 0 && $coupon_amount_from == 0) {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'coupon_amount',
-                        'value' => $coupon_amount_to,
-                        'compare' => '<=',
-                        'type' => 'NUMERIC'
-                ));
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'coupon_amount',
+                    'value' => $coupon_amount_to,
+                    'compare' => '<=',
+                    'type' => $amount_cast,
+                );
             }
             if ($coupon_amount_to != 0 && $coupon_amount_from != 0) {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'coupon_amount',
-                        'value' => array($coupon_amount_from, $coupon_amount_to),
-                        'compare' => 'BETWEEN',
-                        'type' => 'NUMERIC'
-                ));
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'coupon_amount',
+                    'value' => array($coupon_amount_from, $coupon_amount_to),
+                    'compare' => 'BETWEEN',
+                    'type' => $amount_cast,
+                );
             }
+            // Interpret user-entered dates as store-local time (not UTC) and extend
+            // the "to" bound to end-of-day so a coupon expiring on the "to" date
+            // is still included (fixes same-day from/to returning nothing).
+            $wp_tz = wp_timezone();
             if ($coupon_exp_date_from != '0000-00-00' && $coupon_exp_date_to == '0000-00-00') {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'date_expires',
-                        'value' => strtotime($coupon_exp_date_from),
-                        'compare' => '>=',
-                ));
+                $from_ts = ( new DateTime( $coupon_exp_date_from . ' 00:00:00', $wp_tz ) )->getTimestamp();
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'date_expires',
+                    'value' => $from_ts,
+                    'compare' => '>=',
+                );
             }
             if ($coupon_exp_date_to != '0000-00-00' && $coupon_exp_date_from == '0000-00-00') {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'date_expires',
-                        'value' => strtotime($coupon_exp_date_to),
-                        'compare' => '<=',
-                ));
+                $to_ts = ( new DateTime( $coupon_exp_date_to . ' 23:59:59', $wp_tz ) )->getTimestamp();
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'date_expires',
+                    'value' => $to_ts,
+                    'compare' => '<=',
+                );
             }
             if ($coupon_exp_date_to != '0000-00-00' && $coupon_exp_date_from != '0000-00-00') {
-                // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Its necessary to use meta query.
-                $coupon_args['meta_query'] = array(
-                    array(
-                        'key' => 'date_expires',
-                        'value' => array(strtotime($coupon_exp_date_from), strtotime($coupon_exp_date_to)),
-                        'compare' => 'BETWEEN',
-                ));
+                $from_ts = ( new DateTime( $coupon_exp_date_from . ' 00:00:00', $wp_tz ) )->getTimestamp();
+                $to_ts   = ( new DateTime( $coupon_exp_date_to . ' 23:59:59', $wp_tz ) )->getTimestamp();
+                $coupon_args['meta_query'][] = array(
+                    'key' => 'date_expires',
+                    'value' => array( $from_ts, $to_ts ),
+                    'compare' => 'BETWEEN',
+                );
             }
             
             if (!empty($selected_coupon_ids)) {

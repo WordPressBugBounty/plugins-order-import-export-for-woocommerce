@@ -61,6 +61,20 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Bulk_Export {
 		foreach ($coupons as $coupon) {
 			foreach ($csv_columns as $column => $value) {
 				if (!$export_columns || in_array($column, $export_columns)) {
+					// date_expires is stored as a Unix timestamp in post meta.
+					// WP_Post::__isset() returns true for any existing meta key
+					// (via metadata_exists()), so the generic isset() branch
+					// below would otherwise write the raw timestamp straight
+					// to the CSV — which the importer then rejects as an
+					// invalid date. Format to Y-m-d here, before __isset()
+					// swallows the column. The wizard importer at
+					// coupon/import/import.php:195 parses Y-m-d back via
+					// parse_csv_date_to_local_string().
+					if ( $column === 'date_expires' ) {
+						$exp = get_post_meta( $coupon->ID, 'date_expires', true );
+						$row[] = ! empty( $exp ) ? wp_date( 'Y-m-d', (int) $exp ) : '';
+						continue;
+					}
 					if (isset($coupon->$column)) {
 						if (is_array($coupon->$column)) {
 							$coupon->$column = implode(",", $coupon->$column);
@@ -90,9 +104,6 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Bulk_Export {
 					} elseif ($column === 'exclude_product_SKUs') {
 						$row[] = !empty($exsku) ? $exsku : '';
 						unset($exsku);
-					} elseif ($column === 'expiry_date') {
-						$exp_date = get_post_meta($coupon->ID, 'date_expires');
-						$row[] = !empty($exp_date[0]) ? wp_date("Y-m-d", $exp_date[0]) : '';
 					} else {
 						$row[] = '';
 					}

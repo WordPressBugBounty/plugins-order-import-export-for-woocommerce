@@ -528,7 +528,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 	*/
 	public function import($out)
 	{
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce handled in ajax_main().	
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce handled in ajax_main().
 		$offset=(isset($_POST['offset']) ? floatval(wp_unslash($_POST['offset'])) : 0);
 		$import_id=(isset($_POST['import_id']) ? intval(wp_unslash($_POST['import_id'])) : 0);
 		// phpcs:enable
@@ -539,11 +539,60 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 		/* do the export process */
 		$out=$this->import_obj->process_action($form_data, 'import', $this->to_import, '', $import_id, $offset);
 		if($out['response']===true)
-		{			
+		{
 			$out['status']=1;
 		}else
 		{
 			$out['status']=0;
+		}
+		return $out;
+	}
+
+	/**
+	 * Mark the running import's History row as failed with "Cancelled by user".
+	 *
+	 * The browser's cancel button aborts the in-flight AJAX only, which previously
+	 * left the row stuck in Running/Incomplete. We flip it to failed server-side
+	 * before the abort so History reflects reality. Only overwrites rows still in
+	 * the pending (running) state so a race with completion doesn't clobber a
+	 * finished entry.
+	 *
+	 * @param array $out
+	 * @return array
+	 */
+	public function cancel_import( $out )
+	{
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce handled in ajax_main().
+		$import_id      = isset( $_POST['import_id'] ) ? absint( wp_unslash( $_POST['import_id'] ) ) : 0;
+		$flipped        = false;
+		$current_status = null;
+		if ( $import_id > 0 ) {
+			global $wpdb;
+			$tb = $wpdb->prefix . Wt_Import_Export_For_Woo_Order_Basic::$history_tb;
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- History table has no object cache.
+			$current_status = $wpdb->get_var( $wpdb->prepare( "SELECT status FROM {$tb} WHERE id = %d", $import_id ) );
+			// phpcs:enable
+			if ( null !== $current_status && (int) $current_status === (int) Wt_Import_Export_For_Woo_Basic_History::$status_arr['pending'] ) {
+				Wt_Import_Export_For_Woo_Basic_History::record_failure( $import_id, __( 'Cancelled by user', 'order-import-export-for-woocommerce' ) );
+				$flipped = true;
+			}
+		}
+		$out['status'] = 1;
+		// Message mirrors the actual effect so the user isn't misled by a
+		// stale click: we only flip rows still in the pending (running)
+		// state, so an already-finished or already-cancelled run should
+		// not report "Import cancelled".
+		if ( $flipped ) {
+			$out['msg'] = __( 'Import cancelled', 'order-import-export-for-woocommerce' );
+		} elseif ( null === $current_status ) {
+			$out['msg'] = __( 'Import not found', 'order-import-export-for-woocommerce' );
+		} elseif ( (int) $current_status === (int) Wt_Import_Export_For_Woo_Basic_History::$status_arr['failed'] ) {
+			// 'failed' covers both genuine errors and user-cancelled runs
+			// (record_failure stores "Cancelled by user" in status_text);
+			// a neutral "already stopped" phrasing fits both.
+			$out['msg'] = __( 'Import already stopped', 'order-import-export-for-woocommerce' );
+		} else {
+			$out['msg'] = __( 'Import already finished', 'order-import-export-for-woocommerce' );
 		}
 		return $out;
 	}
