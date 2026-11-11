@@ -162,7 +162,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Csvwriter
 	}
 	private function fput_csv($fp, $row, $delm=',', $encloser='"' )
 	{
-		fputcsv($fp,$row,$delm,$encloser);
+		fputcsv($fp,$row,$delm,$encloser,'');
 	}
 	private function array_to_csv($arr, $delm=',', $encloser='"') {
 		// phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fopen

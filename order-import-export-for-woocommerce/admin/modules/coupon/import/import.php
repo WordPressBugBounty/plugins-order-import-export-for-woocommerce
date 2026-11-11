@@ -215,7 +215,7 @@ class Wt_Import_Export_For_Woo_Order_Basic_Coupon_Import {
                     continue;
                 }            
                 if ('description' == $column || 'post_excerpt' == $column ) {
-                    $item_data['description'] = $value;
+                    $item_data['description'] = wp_slash($value);
                     continue;
                 }  
                 if ('usage_count' == $column ) {

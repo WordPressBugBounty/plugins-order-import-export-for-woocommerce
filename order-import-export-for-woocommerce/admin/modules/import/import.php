@@ -575,6 +575,10 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 					$file_path = $this->get_file_path($file_name);
 					
 					if($file_dir && $import_dir && strpos($file_dir, $import_dir) === 0) {
+						if ( ! function_exists( 'finfo_open' ) || ! function_exists( 'finfo_file' ) ) {
+							$out['msg'] = __( 'This server is missing a required PHP extension (ext-fileinfo). Please ask your host to enable it before importing files.', 'order-import-export-for-woocommerce' );
+							return $out;
+						}
 						if($file_from == 'local') {
 							if(@copy($local_file_path, $file_path))
 							{
@@ -683,7 +687,14 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import
 		    'stream'      => false,
 		    'filename'    => null
 		);
-		return Wt_Iew_Sh::safe_remote_get($target_url, $def_args);
+		if ( method_exists( 'Wt_Iew_Sh', 'safe_remote_get' ) ) {
+			return Wt_Iew_Sh::safe_remote_get( $target_url, $def_args );
+		}
+
+		// Fallback when an older sibling plugin loaded Wt_Iew_Sh first and shadowed the fixed class.
+		$def_args['sslverify']          = true;
+		$def_args['reject_unsafe_urls'] = true;
+		return wp_safe_remote_get( $target_url, $def_args );
 	}
 
 	public function get_log_file_name($history_id)

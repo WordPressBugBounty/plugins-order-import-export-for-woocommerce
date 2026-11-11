@@ -171,9 +171,8 @@ class Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export {
         $row = apply_filters('wt_iew_product_bulk_export_order_csv_header', $row, $filter_args); //Alter CSV Header
 
         if (!empty($row)) {
-            $row = array_map('Wt_Import_Export_For_Woo_Order_Basic_Order_Bulk_Export::wrap_column', $row);
             // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
-            fwrite($fp, implode($delimiter, $row) . "\n");
+            fputcsv($fp, array_values($row), $delimiter, '"');
         }
         $filter_args['header_row'] = $row;
         $filter_args['header_column_keys'] = $header_column_keys;

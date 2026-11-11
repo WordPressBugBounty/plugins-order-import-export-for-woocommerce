@@ -171,6 +171,11 @@ class Wt_Import_Export_For_Woo_Order_Basic_Import_Ajax
 
 					$tmp_name = isset( $_FILES['wt_iew_import_file']['tmp_name'] ) ? wp_unslash( $_FILES['wt_iew_import_file']['tmp_name'] ) : '';
 
+					if ( ! function_exists( 'finfo_open' ) || ! function_exists( 'finfo_file' ) ) {
+						$out['msg'] = __( 'This server is missing a required PHP extension (ext-fileinfo). Please ask your host to enable it before importing files.', 'order-import-export-for-woocommerce' );
+						return $out;
+					}
+
 					if ( ! $tmp_name || ! $this->import_obj->is_file_content_safe( $tmp_name ) ) {
 						$out['msg'] = __( 'Invalid file content. The uploaded file does not appear to be a valid import file.', 'order-import-export-for-woocommerce' );
 						return $out;

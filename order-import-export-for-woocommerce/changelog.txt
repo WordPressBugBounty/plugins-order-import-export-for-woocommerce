@@ -1,6 +1,12 @@
 
 == Changelog ==
 
+= 2.8.1 2026-11-11 =
+* [Fix] - Security: hardened CSV export to prevent row injection on re-import via crafted order data. Reported by J Rose.
+* [Update] - Bumped minimum PHP requirement to 7.4.
+* [Compatibility] – Tested OK with WordPress 7.1.4
+* [Compatibility] – Tested OK with WooCommerce 11.2.2
+
 = 2.8.0 2026-10-23 =
 * [Compatibility] – Tested OK with WordPress 7.1.3
 * [Compatibility] – Tested OK with WooCommerce 11.2.1
